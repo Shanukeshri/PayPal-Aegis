@@ -71,6 +71,165 @@ const DEFAULT_DEMO_MILESTONES = [
 ];
 
 /**
+ * Normalizes dollar amounts to enforce fail-safe positive guardrails.
+ * Any non-positive (<= 0) or unparseable value is normalized to minimum $10.00.
+ */
+function normalizeAmount(val: any): { value: string; wasNormalized: boolean } {
+  let num = typeof val === 'number' ? val : parseFloat(String(val || '0').replace(/[^0-9.-]/g, ''));
+  if (isNaN(num) || num <= 0) {
+    return { value: '10.00', wasNormalized: true };
+  }
+  return { value: num.toFixed(2), wasNormalized: false };
+}
+
+/**
+ * Robust SOW text parser with fail-safe fallback.
+ * If text is malformed or gibberish, triggers fallback to a single generic milestone priced at $100.00.
+ */
+function parseRawSow(rawText: string): {
+  project: Partial<Project>;
+  milestones: any[];
+  isFallback: boolean;
+} {
+  const fallbackMilestone = {
+    id: 'm1-custom-deliverable',
+    name: 'Milestone 1: Custom Deliverable Delivery',
+    description:
+      rawText && rawText.trim().length > 0
+        ? rawText.trim().slice(0, 180)
+        : 'General delivery & verification phase.',
+    amount: { currency_code: 'USD', value: '100.00' },
+    status: 'DRAFT' as const,
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    dependencies: [],
+    deliverables: [],
+    evidenceDocuments: [],
+    authorizationHistory: [],
+  };
+
+  const fallback = {
+    project: {
+      name: 'Custom Contract Scope (Fail-Safe Fallback Active)',
+      clientName: 'Enterprise Client LLC',
+      clientEmail: 'billing@client-enterprise.sandbox.com',
+      description:
+        rawText && rawText.trim().length > 0
+          ? rawText.trim().slice(0, 300)
+          : 'Custom milestone contract delivery.',
+      totalAmount: { currency_code: 'USD', value: '100.00' },
+    },
+    milestones: [fallbackMilestone],
+    isFallback: true,
+  };
+
+  if (!rawText || typeof rawText !== 'string' || rawText.trim().length < 8) {
+    return fallback;
+  }
+
+  // Try parsing as JSON first in case user pastes JSON
+  try {
+    const parsed = JSON.parse(rawText);
+    if (Array.isArray(parsed.milestones) && parsed.milestones.length > 0) {
+      const parsedMilestones = parsed.milestones.map((m: any, idx: number) => {
+        const norm = normalizeAmount(m.amount?.value || m.amount);
+        return {
+          id: m.id || `m${idx + 1}-custom`,
+          name: m.name || `Milestone ${idx + 1}`,
+          description: m.description || `Custom scope deliverable for milestone ${idx + 1}`,
+          amount: { currency_code: 'USD', value: norm.value },
+          status: 'DRAFT' as const,
+          dueDate: new Date(Date.now() + (idx + 1) * 7 * 24 * 60 * 60 * 1000),
+          dependencies: idx > 0 ? [`m${idx}-custom`] : [],
+          deliverables: [],
+          evidenceDocuments: [],
+          authorizationHistory: [],
+        };
+      });
+      const totalVal = parsedMilestones.reduce((acc: number, m: any) => acc + parseFloat(m.amount.value), 0);
+      return {
+        project: {
+          name: parsed.project?.name || 'Custom JSON Contract Scope',
+          clientName: parsed.project?.clientName || 'Enterprise Client LLC',
+          clientEmail: parsed.project?.clientEmail || 'billing@client-enterprise.sandbox.com',
+          description: parsed.project?.description || 'Custom JSON contract statement of work.',
+          totalAmount: { currency_code: 'USD', value: totalVal.toFixed(2) },
+        },
+        milestones: parsedMilestones,
+        isFallback: false,
+      };
+    }
+  } catch {
+    // Continue to natural text parsing
+  }
+
+  // Parse lines for milestone patterns
+  const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
+  const extractedMilestones: any[] = [];
+  let currentMilestone: any = null;
+
+  for (const line of lines) {
+    const isHeader = /^(?:milestone|phase|\d+[\.\):])\s*(.*?)(?::|$)/i.test(line);
+    const amountMatch =
+      line.match(/\$\s*([0-9,]+(?:\.[0-9]{2})?)/) || line.match(/([0-9,]+(?:\.[0-9]{2})?)\s*USD/i);
+
+    if (isHeader || (amountMatch && !currentMilestone)) {
+      if (currentMilestone && currentMilestone.name) {
+        extractedMilestones.push(currentMilestone);
+      }
+      const amountNum = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : 100.0;
+      const norm = normalizeAmount(amountNum);
+      const nameMatch = line.match(/^(?:milestone|phase|\d+[\.\):])\s*([^$\n-:]+)/i);
+      const name =
+        nameMatch && nameMatch[1].trim()
+          ? `Milestone ${extractedMilestones.length + 1}: ${nameMatch[1].trim()}`
+          : line.slice(0, 50);
+
+      currentMilestone = {
+        id: `m${extractedMilestones.length + 1}-custom`,
+        name,
+        description: line,
+        amount: { currency_code: 'USD', value: norm.value },
+        status: 'DRAFT' as const,
+        dueDate: new Date(Date.now() + (extractedMilestones.length + 1) * 7 * 24 * 60 * 60 * 1000),
+        dependencies:
+          extractedMilestones.length > 0 ? [extractedMilestones[extractedMilestones.length - 1].id] : [],
+        deliverables: [],
+        evidenceDocuments: [],
+        authorizationHistory: [],
+      };
+    } else if (currentMilestone) {
+      currentMilestone.description += ' ' + line;
+      if (amountMatch && currentMilestone.amount.value === '10.00') {
+        const norm = normalizeAmount(amountMatch[1].replace(/,/g, ''));
+        currentMilestone.amount.value = norm.value;
+      }
+    }
+  }
+
+  if (currentMilestone && currentMilestone.name) {
+    extractedMilestones.push(currentMilestone);
+  }
+
+  if (extractedMilestones.length === 0) {
+    // Malformed text or gibberish (e.g., "asdjkskdfjk") triggers fallback
+    return fallback;
+  }
+
+  const totalVal = extractedMilestones.reduce((acc: number, m: any) => acc + parseFloat(m.amount.value), 0);
+  return {
+    project: {
+      name: 'Custom Parsed SOW Contract',
+      clientName: 'Enterprise Client LLC',
+      clientEmail: 'billing@client-enterprise.sandbox.com',
+      description: rawText.slice(0, 300),
+      totalAmount: { currency_code: 'USD', value: totalVal.toFixed(2) },
+    },
+    milestones: extractedMilestones,
+    isFallback: false,
+  };
+}
+
+/**
  * GET /api/demo/status
  * Returns system configuration state, credentials status, and demo counters.
  */
@@ -94,49 +253,103 @@ router.get('/status', (req: Request, res: Response) => {
 
 /**
  * POST /api/demo/fixtures/seed-contract
- * Judge Demo Button 1:
- * Seeds the contract into Bryntum Gantt and locks Milestone 1 in PayPal escrow hold.
+ * Judge Demo Button 1 & Custom Input Sandbox:
+ * Ingests contract (default or custom/raw text SOW) into Bryntum Gantt,
+ * applies fail-safe guardrails (normalized positive amounts, fallback on malformed text),
+ * and locks Milestone 1 in PayPal escrow hold (intent: AUTHORIZE).
  */
 router.post('/fixtures/seed-contract', async (req: Request, res: Response) => {
   try {
     const projectId = 'proj-aegis-demo';
     const now = new Date();
+    const { customProject, customMilestones, rawSowText } = req.body || {};
 
-    const project: Project = {
+    let targetMilestones: any[] = [];
+    let targetProject: any = {
       ...DEFAULT_DEMO_PROJECT,
       id: projectId,
       createdAt: now,
       updatedAt: now,
-      milestones: [],
     };
+    let guardrailApplied = false;
+    let guardrailNotice = '';
 
-    store.setProject(project);
+    if (rawSowText && typeof rawSowText === 'string') {
+      const parsed = parseRawSow(rawSowText);
+      targetMilestones = parsed.milestones.map((m) => ({ ...m, projectId, createdAt: now, updatedAt: now }));
+      targetProject = { ...targetProject, ...parsed.project };
+      if (parsed.isFallback) {
+        guardrailApplied = true;
+        guardrailNotice =
+          'Malformed text or unparseable scope detected: Fallback JSON structure triggered with single generic milestone at $100.00.';
+      }
+    } else if (Array.isArray(customMilestones) && customMilestones.length > 0) {
+      targetMilestones = customMilestones.map((m: any, idx: number) => {
+        const norm = normalizeAmount(m.amount?.value || m.amount);
+        if (norm.wasNormalized) {
+          guardrailApplied = true;
+          guardrailNotice = 'Non-positive amount detected; normalized to minimum $10.00.';
+        }
+        return {
+          id: m.id || `m${idx + 1}-custom`,
+          name: m.name || `Milestone ${idx + 1}`,
+          description: m.description || `Milestone ${idx + 1} scope deliverable`,
+          amount: { currency_code: 'USD', value: norm.value },
+          status: 'DRAFT' as const,
+          dueDate: m.dueDate ? new Date(m.dueDate) : new Date(Date.now() + (idx + 1) * 7 * 24 * 60 * 60 * 1000),
+          dependencies: m.dependencies || (idx > 0 ? [`m${idx}-custom`] : []),
+          deliverables: [],
+          evidenceDocuments: [],
+          authorizationHistory: [],
+          projectId,
+          createdAt: now,
+          updatedAt: now,
+        };
+      });
+      if (customProject) {
+        targetProject = { ...targetProject, ...customProject };
+      }
+      const totalVal = targetMilestones.reduce((acc: number, m: any) => acc + parseFloat(m.amount.value), 0);
+      targetProject.totalAmount = { currency_code: 'USD', value: totalVal.toFixed(2) };
+    } else {
+      targetMilestones = DEFAULT_DEMO_MILESTONES.map((m) => ({ ...m, projectId }));
+    }
+
+    targetProject.milestones = [];
+    store.clearMilestonesByProject(projectId);
+    store.setProject(targetProject);
     store.clearPendingApprovals(); // Reset any staged demo approvals from previous runs
 
-    // Seed Milestones
-    for (const m of DEFAULT_DEMO_MILESTONES) {
-      store.setMilestone({ ...m, projectId });
+    // Seed Milestones into memory store
+    for (const m of targetMilestones) {
+      store.setMilestone(m);
     }
 
     // Immediately execute Milestone 1 Escrow Hold (Step 1)
-    const holdResult = await holdManager.createMilestoneHold('m1-cloud-arch');
+    const firstMilestoneId = targetMilestones[0].id;
+    const holdResult = await holdManager.createMilestoneHold(firstMilestoneId);
 
     const updatedMilestones = store.getMilestonesByProject(projectId);
-    project.milestones = updatedMilestones;
-    store.setProject(project);
+    targetProject.milestones = updatedMilestones;
+    store.setProject(targetProject);
     store.clearPendingApprovals(); // Reset any staged demo approvals from previous runs
 
     logger.info('Judge Demo: Button 1 (Seed Contract & Lock Sandbox Hold) executed', {
       projectId,
-      milestoneId: 'm1-cloud-arch',
+      milestoneId: firstMilestoneId,
       holdResult,
+      guardrailApplied,
     });
 
     res.json({
       success: true,
-      message: 'Contract successfully ingested into Bryntum Gantt and Milestone 1 funds locked in PayPal Escrow hold.',
+      message: guardrailNotice
+        ? `Contract ingested with guardrails applied: ${guardrailNotice}`
+        : 'Contract successfully ingested into Bryntum Gantt and Milestone 1 funds locked in PayPal Escrow hold.',
+      guardrailNotice: guardrailNotice || undefined,
+      guardrailApplied,
       data: {
-        project,
+        project: targetProject,
         milestones: updatedMilestones,
         holdResult,
       },
@@ -189,31 +402,56 @@ router.post('/fixtures/fast-forward-day3', async (req: Request, res: Response) =
 
 /**
  * POST /api/demo/fixtures/verify-deliverable
- * Judge Demo Button 3:
+ * Judge Demo Button 3 & Custom Deliverable/SKU Playground:
  * Verifies milestone deliverable via Channel3 catalog spec check & Elastic kNN embedding,
- * then stages capture in the HITL approval queue.
+ * supporting custom product names, custom SKUs, and uploaded filenames.
+ * Then stages capture in the HITL approval queue.
  */
 router.post('/fixtures/verify-deliverable', async (req: Request, res: Response) => {
   try {
-    const { milestoneId = 'm1-cloud-arch', query = 'enterprise-cloud-architecture' } = req.body;
-    const milestone = store.getMilestone(milestoneId);
+    const {
+      milestoneId = 'm1-cloud-arch',
+      query,
+      customSku,
+      customTitle,
+      fileName,
+    } = req.body || {};
+
+    let milestone = store.getMilestone(milestoneId);
     if (!milestone) {
-      return res.status(404).json({ success: false, error: 'Milestone not found' });
+      const all = store.getAllMilestones();
+      if (all.length > 0) {
+        milestone = all[0];
+      } else {
+        return res.status(404).json({ success: false, error: 'Milestone not found' });
+      }
     }
 
+    const searchQuery = query || customTitle || 'enterprise-cloud-architecture';
+
     // 1. Channel3 Catalog Spec Verification
-    const ch3Spec = await verificationService.verifyWithChannel3(query);
+    let ch3Spec = await verificationService.verifyWithChannel3(searchQuery);
+    if (customTitle || customSku) {
+      ch3Spec = {
+        ...ch3Spec,
+        title: customTitle || ch3Spec.title,
+        sku: customSku || ch3Spec.sku,
+      };
+    }
 
     // 2. Elastic kNN Vector Authenticity Verification
-    const fakeBuffer = Buffer.from(`Deliverable artifact content for ${milestone.name}`);
+    const deliverableFileName = fileName || 'production_cloud_architecture_spec.pdf';
+    const fakeBuffer = Buffer.from(
+      `Deliverable artifact content for ${milestone.name} - SKU: ${ch3Spec.sku} - File: ${deliverableFileName}`
+    );
     const elasticAuth = await verificationService.verifyDeliverableAuthenticity(
-      'production_cloud_architecture_spec.pdf',
+      deliverableFileName,
       fakeBuffer
     );
 
     const deliverable = {
       id: `deliv-${Date.now()}`,
-      milestoneId,
+      milestoneId: milestone.id,
       name: ch3Spec.title,
       type: 'FILE' as const,
       sha256Hash: elasticAuth.sha256Hash,
@@ -225,6 +463,7 @@ router.post('/fixtures/verify-deliverable', async (req: Request, res: Response) 
         elasticKnnScore: elasticAuth.knnScore,
         isStockPhoto: elasticAuth.isStockPhoto,
         verifiedAt: new Date(),
+        fileName: deliverableFileName,
       },
     };
 
@@ -249,29 +488,31 @@ router.post('/fixtures/verify-deliverable', async (req: Request, res: Response) 
     const hitlRes = safeGate.interceptAction(
       'CAPTURE_AUTHORIZATION',
       {
-        milestoneId,
+        milestoneId: milestone.id,
         authorizationId: milestone.activeAuthorizationId,
         amount: milestone.amount,
         finalCapture: false,
         deliverableTitle: ch3Spec.title,
         knnScore: elasticAuth.knnScore,
         channel3Sku: ch3Spec.sku,
+        fileName: deliverableFileName,
       },
-      `Approve capture of $${milestone.amount.value} for "${milestone.name}" (Channel3 SKU: ${ch3Spec.sku}, Elastic kNN: ${(elasticAuth.knnScore * 100).toFixed(1)}%)`,
+      `Approve capture of $${milestone.amount.value} for "${milestone.name}" (SKU: ${ch3Spec.sku}, Elastic kNN: ${(elasticAuth.knnScore * 100).toFixed(1)}%)`,
       'MEDIUM',
       undefined,
-      { milestoneId }
+      { milestoneId: milestone.id }
     );
 
     logger.info('Judge Demo: Button 3 (Verify Deliverable via Channel3 & Elastic) executed', {
-      milestoneId,
+      milestoneId: milestone.id,
       deliverableId: deliverable.id,
+      sku: ch3Spec.sku,
       hitlRequestId: hitlRes.id,
     });
 
     res.json({
       success: true,
-      message: 'Deliverable verified with Channel3 (catalog specs) and Elastic (kNN authenticity). Capture staged in HITL Approval Queue.',
+      message: `Deliverable "${ch3Spec.title}" verified via Channel3 (${ch3Spec.sku}) & Elastic (${(elasticAuth.knnScore * 100).toFixed(1)}% kNN). Capture staged in HITL Approval Queue.`,
       data: {
         milestone,
         channel3Spec: ch3Spec,
@@ -287,31 +528,74 @@ router.post('/fixtures/verify-deliverable', async (req: Request, res: Response) 
 
 /**
  * POST /api/demo/fixtures/simulate-dispute
- * Judge Demo Button 4:
- * Injects a realistic SNAD dispute event at 1.42% ratio to demonstrate:
- * - 1.5% Dispute Ratio Radar
- * - Branch A: Pre-escalation make-offer ($0 fee)
- * - Branch B: Auto-compiled A4 PDF provide-evidence
+ * Judge Demo Button 4 & Custom Dispute Ratio Playground:
+ * Injects a realistic SNAD dispute event with configurable sales & disputes,
+ * clamps out-of-bounds dispute ratios to 100%, and activates either:
+ * - Branch A: Pre-escalation make-offer ($0 fee) if <1.50%
+ * - Branch B: Auto-compiled A4 PDF representment evidence bundle if >=1.50%
  */
 router.post('/fixtures/simulate-dispute', async (req: Request, res: Response) => {
   try {
-    const result = await disputeShield.simulateSnadDisputeFixture(0.0142);
+    const { salesCount, disputeCount, disputeAmount } = req.body || {};
+    let sales = salesCount !== undefined ? parseInt(salesCount, 10) : 211;
+    let disputes = disputeCount !== undefined ? parseInt(disputeCount, 10) : 3;
 
-    logger.info('Judge Demo: Button 4 (Simulate SNAD Dispute at 1.42% Ratio) executed', {
+    if (isNaN(sales) || sales < 1) sales = 211;
+    if (isNaN(disputes) || disputes < 0) disputes = 3;
+
+    let clamped = false;
+    let guardrailNotice: string | undefined = undefined;
+
+    // Guardrail: Out-of-bounds dispute ratios (e.g., 50 disputes on 10 sales = 500%)
+    // must clamp cleanly to 100% and show a "High Risk Penalty Tier Active" notice.
+    if (disputes > sales) {
+      disputes = sales;
+      clamped = true;
+      guardrailNotice = '⚠️ Out-of-bounds dispute ratio clamped cleanly to 100.00%. High Risk Penalty Tier Active.';
+    }
+
+    const normAmount = normalizeAmount(disputeAmount || '350.00');
+    if (normAmount.wasNormalized) {
+      guardrailNotice =
+        (guardrailNotice ? guardrailNotice + ' ' : '') +
+        '⚠️ Value must be positive; normalized to minimum $10.00.';
+    }
+
+    const ratio = sales > 0 ? disputes / sales : 0;
+    const result = await disputeShield.simulateSnadDisputeFixture(
+      ratio,
+      sales,
+      disputes,
+      normAmount.value
+    );
+
+    logger.info('Judge Demo: Button 4 (Simulate SNAD Dispute) executed', {
       disputeId: result.dispute.dispute_id,
       ratio: result.triage.currentRatio.ratio,
       action: result.triage.recommendedAction,
       hitlRequestId: result.hitlRequestId,
+      clamped,
     });
+
+    const isHighRisk = ratio >= 0.015 || clamped;
+    const branchDesc =
+      result.triage.recommendedAction === 'PROVIDE_EVIDENCE'
+        ? 'High Risk Penalty Tier Active (≥1.50%): Auto-compiled A4 PDF representment evidence bundle'
+        : 'Low Risk Tier (<1.50%): Pre-escalation Make-Offer branch active ($0 fee)';
 
     res.json({
       success: true,
-      message: 'Simulated SNAD dispute injected at 1.42% ratio. Dispute Shield triaged case and staged resolution in HITL queue.',
+      message: guardrailNotice
+        ? `${guardrailNotice} (${branchDesc})`
+        : `Simulated SNAD dispute injected at ${(ratio * 100).toFixed(2)}% ratio (${branchDesc}).`,
+      clamped,
+      guardrailNotice,
       data: {
         dispute: result.dispute,
         triage: result.triage,
         hitlRequestId: result.hitlRequestId,
         pdfGenerated: !!result.pdfBuffer,
+        ratio: (ratio * 100).toFixed(2) + '%',
       },
     });
   } catch (err: any) {

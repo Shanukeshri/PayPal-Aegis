@@ -300,20 +300,26 @@ export async function executeProvideEvidence(
  * Injects dispute at 1.42% ratio to show pre-escalation vs provide-evidence branches.
  */
 export async function simulateSnadDisputeFixture(
-  targetRatio = 0.0142
+  targetRatio = 0.0142,
+  customSales?: number,
+  customDisputes?: number,
+  customDisputeAmount?: string
 ): Promise<{
   dispute: PayPalDispute;
   triage: DisputeTriageResult;
   hitlRequestId?: string;
   pdfBuffer?: Buffer;
 }> {
-  // Set store counters so adding 1 dispute yields exactly 1.42% (3 / 211 = 1.4218% in Warning Zone)
-  const sales = 211;
-  const existingDisputes = 2;
+  // If custom counters provided, configure store counters accordingly
+  const sales = customSales !== undefined ? Math.max(1, customSales) : 211;
+  // Notice: handleDisputeCreated adds 1 dispute, so set baseline to Math.max(0, disputes - 1)
+  const targetDisputes = customDisputes !== undefined ? Math.max(1, customDisputes) : 3;
+  const existingDisputes = Math.max(0, targetDisputes - 1);
   store.setDisputeRatioCounters(sales, existingDisputes);
 
   const disputeId = 'PP-D-40193';
   const dueDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+  const disputeAmountVal = customDisputeAmount || '350.00';
 
   const mockDispute: PayPalDispute = {
     dispute_id: disputeId,
@@ -321,7 +327,7 @@ export async function simulateSnadDisputeFixture(
     update_time: new Date().toISOString(),
     status: 'WAITING_FOR_SELLER_RESPONSE',
     reason: 'MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED',
-    dispute_amount: { currency_code: 'USD', value: '350.00' },
+    dispute_amount: { currency_code: 'USD', value: disputeAmountVal },
     dispute_life_cycle_stage: 'INQUIRY', // Inquiry stage near 1.5%
     dispute_channel: 'INTERNAL',
     seller_response_due_date: dueDate,

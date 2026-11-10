@@ -82,6 +82,14 @@ class InMemoryStore {
     return Array.from(this.milestones.values()).filter(m => m.projectId === projectId);
   }
 
+  clearMilestonesByProject(projectId: string): void {
+    for (const [id, m] of this.milestones.entries()) {
+      if (m.projectId === projectId) {
+        this.milestones.delete(id);
+      }
+    }
+  }
+
   getMilestoneByAuthId(authId: string): Milestone | undefined {
     return Array.from(this.milestones.values()).find(
       m => m.activeAuthorizationId === authId || m.originalAuthorizationId === authId

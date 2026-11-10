@@ -8,6 +8,7 @@ import {
   ShieldCheckIcon,
   BoltIcon,
   ArrowDownTrayIcon,
+  CommandLineIcon,
 } from '@heroicons/react/24/outline';
 import api from '../../services/api';
 
@@ -18,11 +19,17 @@ interface JudgeDemoToolbarProps {
     paypalConfigured?: boolean;
     pendingApprovalsCount?: number;
   };
+  onToggleSandbox?: () => void;
+  isSandboxOpen?: boolean;
+  onBeforeAction?: (actionName: string) => void;
 }
 
 export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
   onActionComplete,
   statusInfo,
+  onToggleSandbox,
+  isSandboxOpen,
+  onBeforeAction,
 }) => {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [bannerMessage, setBannerMessage] = useState<{ text: string; type: 'success' | 'info' | 'warning' } | null>(null);
@@ -34,6 +41,7 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
 
   const handleSeedContract = async () => {
     setLoadingAction('seed');
+    onBeforeAction?.('Seed Contract & Orders v2 Hold');
     try {
       const res = await api.fixtureSeedContract();
       showBanner(res.message || 'Milestone 1 locked in escrow hold (intent: AUTHORIZE)', 'success');
@@ -47,6 +55,7 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
 
   const handleFastForwardDay3 = async () => {
     setLoadingAction('day3');
+    onBeforeAction?.('Day-3 Reauthorization Timer');
     try {
       const res = await api.fixtureFastForwardDay3();
       showBanner(res.message || 'Day-3 Reauthorization executed. authorization_id rotated.', 'info');
@@ -60,6 +69,7 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
 
   const handleVerifyDeliverable = async () => {
     setLoadingAction('verify');
+    onBeforeAction?.('Channel3 & Elastic Deliverable Verification');
     try {
       const res = await api.fixtureVerifyDeliverable();
       showBanner(res.message || 'Deliverable verified via Channel3 & Elastic. Capture staged in HITL queue.', 'success');
@@ -73,6 +83,7 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
 
   const handleSimulateDispute = async () => {
     setLoadingAction('dispute');
+    onBeforeAction?.('SNAD Dispute Simulation & Shield');
     try {
       const res = await api.fixtureSimulateDispute();
       showBanner(res.message || 'SNAD dispute injected at 1.42% ratio. Auto-defense initiated.', 'warning');
@@ -140,11 +151,26 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
           </div>
         </div>
 
-        {/* 1-Click Judge Demo Toolbar Controls */}
+        {/* 1-Click Judge Demo Toolbar Controls + Custom Input Mode Toggle */}
         <div className="flex flex-wrap items-center gap-2">
+          {onToggleSandbox && (
+            <button
+              onClick={onToggleSandbox}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border shadow-subtle transition ${
+                isSandboxOpen
+                  ? 'bg-[#0070BA] text-white border-[#0070BA]'
+                  : 'bg-[#F4F1EA] hover:bg-[#E5E0D8] text-[#1C1917] border-[#0070BA]/40'
+              }`}
+              title="Toggle Custom Input Sandbox & Live Payload Playground Drawer"
+            >
+              <CommandLineIcon className={`w-3.5 h-3.5 ${isSandboxOpen ? 'text-white' : 'text-[#0070BA]'}`} />
+              <span>Custom Input Mode {isSandboxOpen ? '▲' : '▼'}</span>
+            </button>
+          )}
+
           <span className="text-xs uppercase tracking-wider text-[#57534E] font-semibold mr-1.5 flex items-center gap-1.5">
             <BoltIcon className="w-4 h-4 text-[#57534E]" />
-            Judge Demo Fixtures:
+            Fixtures:
           </span>
 
           <button
@@ -193,7 +219,7 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
             title="Download Live E2E Audit Logs (.json) for Judge Review"
           >
             <ArrowDownTrayIcon className="w-3.5 h-3.5 text-[#0070BA]" />
-            <span>Download Live E2E Audit Logs (.json)</span>
+            <span>Audit Logs (.json)</span>
           </button>
 
           <button

@@ -13,6 +13,8 @@ import DisputeRatioRadar from '../components/dashboard/DisputeRatioRadar';
 import MutatedAuthLedger from '../components/dashboard/MutatedAuthLedger';
 import BryntumGanttView from '../components/gantt/BryntumGanttView';
 import HITLApprovalDrawer from '../components/hitl/HITLApprovalDrawer';
+import LivePipelineVisualizer, { PipelineStepState } from '../components/pipeline/LivePipelineVisualizer';
+import CustomInputSandboxDrawer, { CustomSandboxExecutionPayload } from '../components/sandbox/CustomInputSandboxDrawer';
 import type {
   Milestone,
   Project,
@@ -30,6 +32,17 @@ export default function Dashboard() {
   const [demoStatus, setDemoStatus] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [socketConnected, setSocketConnected] = useState(false);
+
+  // Custom Input Sandbox Drawer & Live Pipeline Visualizer state
+  const [isSandboxOpen, setIsSandboxOpen] = useState(true);
+  const [pipelineState, setPipelineState] = useState<PipelineStepState>({
+    step: 0,
+    isExecuting: false,
+    actionName: undefined,
+    guardrailNotice: undefined,
+    latencyMs: undefined,
+    payloadSummary: undefined,
+  });
 
   // Fetch all live dashboard data
   const loadDashboardData = useCallback(async () => {
@@ -97,11 +110,96 @@ export default function Dashboard() {
     }
   }, [loadDashboardData]);
 
+  // Animate pipeline on toolbar action
+  const handleBeforeToolbarAction = (actionName: string) => {
+    setPipelineState({
+      step: 1,
+      isExecuting: true,
+      actionName,
+      guardrailNotice: undefined,
+      latencyMs: undefined,
+      payloadSummary: actionName,
+    });
+    setTimeout(() => setPipelineState((prev) => ({ ...prev, step: 2 })), 200);
+    setTimeout(() => setPipelineState((prev) => ({ ...prev, step: 3 })), 400);
+    setTimeout(() => setPipelineState((prev) => ({ ...prev, step: 4 })), 600);
+  };
+
+  const handleToolbarActionComplete = () => {
+    setPipelineState((prev) => ({
+      ...prev,
+      step: 5,
+      isExecuting: false,
+      latencyMs: 142,
+    }));
+    loadDashboardData();
+  };
+
+  // Custom Input Sandbox Action Execution with Animated Pipeline Steps
+  const handleExecuteCustomAction = async (execution: CustomSandboxExecutionPayload) => {
+    const startTime = performance.now();
+    setPipelineState({
+      step: 1,
+      isExecuting: true,
+      actionName: execution.summary,
+      guardrailNotice: execution.guardrailNotice,
+      latencyMs: undefined,
+      payloadSummary: execution.summary,
+    });
+
+    try {
+      // Step 1 -> Step 2: APIMatic Grounding
+      await new Promise((r) => setTimeout(r, 260));
+      setPipelineState((prev) => ({ ...prev, step: 2 }));
+
+      // Step 2 -> Step 3: SafeGate Firewall
+      await new Promise((r) => setTimeout(r, 260));
+      setPipelineState((prev) => ({ ...prev, step: 3 }));
+
+      // Step 3 -> Step 4: PayPal Sandbox Engine Target
+      await new Promise((r) => setTimeout(r, 260));
+      setPipelineState((prev) => ({ ...prev, step: 4 }));
+
+      let res: any;
+      if (execution.actionType === 'SEED_CONTRACT') {
+        res = await api.fixtureSeedContract(execution.payload);
+      } else if (execution.actionType === 'VERIFY_DELIVERABLE') {
+        res = await api.fixtureVerifyDeliverable(execution.payload);
+      } else if (execution.actionType === 'SIMULATE_DISPUTE') {
+        res = await api.fixtureSimulateDispute(execution.payload);
+      }
+
+      const totalDuration = Math.round(performance.now() - startTime);
+
+      // Step 5: Completed successfully
+      setPipelineState({
+        step: 5,
+        isExecuting: false,
+        actionName: execution.summary,
+        guardrailNotice: res?.guardrailNotice || execution.guardrailNotice,
+        latencyMs: totalDuration,
+        payloadSummary: res?.message || execution.summary,
+      });
+
+      await loadDashboardData();
+    } catch (err: any) {
+      setPipelineState({
+        step: 0,
+        isExecuting: false,
+        actionName: execution.summary,
+        guardrailNotice: `Execution error: ${err.message}`,
+        latencyMs: Math.round(performance.now() - startTime),
+      });
+      alert(`Custom Action Error: ${err.message}`);
+    }
+  };
+
   // Fast-Forward Day-3 handler for individual milestone row
   const handleFastForwardDay3 = async (milestoneId: string) => {
     try {
+      handleBeforeToolbarAction('Milestone Day-3 Reauthorization');
       await api.fixtureFastForwardDay3(milestoneId);
-      loadDashboardData();
+      handleToolbarActionComplete();
     } catch (err: any) {
       alert(`Error during Day-3 reauthorization: ${err.message}`);
     }
@@ -110,8 +208,9 @@ export default function Dashboard() {
   // Capture handler
   const handleCapture = async (milestoneId: string) => {
     try {
+      handleBeforeToolbarAction('Milestone Escrow Capture');
       await api.captureMilestone(milestoneId);
-      loadDashboardData();
+      handleToolbarActionComplete();
     } catch (err: any) {
       alert(`Error capturing milestone: ${err.message}`);
     }
@@ -139,16 +238,36 @@ export default function Dashboard() {
 
       {/* Top 1-Click Judge Demo Toolbar */}
       <JudgeDemoToolbar
-        onActionComplete={loadDashboardData}
+        onActionComplete={handleToolbarActionComplete}
         statusInfo={{
           mode: demoStatus.mode,
           paypalConfigured: demoStatus.paypalConfigured,
           pendingApprovalsCount: pendingApprovals.length,
         }}
+        onToggleSandbox={() => setIsSandboxOpen(!isSandboxOpen)}
+        isSandboxOpen={isSandboxOpen}
+        onBeforeAction={handleBeforeToolbarAction}
+      />
+
+      {/* Expandable Custom Input Sandbox Drawer */}
+      <CustomInputSandboxDrawer
+        isOpen={isSandboxOpen}
+        onClose={() => setIsSandboxOpen(false)}
+        onExecute={handleExecuteCustomAction}
+        milestones={milestones}
+        isExecuting={pipelineState.isExecuting}
       />
 
       {/* Main Container - 60-30-10 palette: Primary (#F9F8F5), Secondary (#FFFFFF / #1C1917 / #E5E0D8), Accent (#0070BA) */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {/* Live Execution Pipeline Canvas */}
+        <LivePipelineVisualizer
+          pipelineState={pipelineState}
+          onDismissNotice={() =>
+            setPipelineState((prev) => ({ ...prev, guardrailNotice: undefined }))
+          }
+        />
+
         {/* Executive Header Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Protected Escrow Funds */}

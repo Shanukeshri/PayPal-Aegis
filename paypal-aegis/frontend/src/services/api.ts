@@ -25,13 +25,20 @@ export const api = {
   getDemoStatus: () => client.get('/demo/status').then((r) => r.data),
   resetDemo: () => client.post('/demo/reset').then((r) => r.data),
 
-  // Judge Demo Buttons
-  fixtureSeedContract: () => client.post('/demo/fixtures/seed-contract').then((r) => r.data),
+  // Judge Demo Buttons & Custom Playground
+  fixtureSeedContract: (payload?: any) =>
+    client.post('/demo/fixtures/seed-contract', payload || {}).then((r) => r.data),
   fixtureFastForwardDay3: (milestoneId?: string, simulateNegativeTesting = false) =>
     client.post('/demo/fixtures/fast-forward-day3', { milestoneId, simulateNegativeTesting }).then((r) => r.data),
-  fixtureVerifyDeliverable: (milestoneId?: string) =>
-    client.post('/demo/fixtures/verify-deliverable', { milestoneId }).then((r) => r.data),
-  fixtureSimulateDispute: () => client.post('/demo/fixtures/simulate-dispute').then((r) => r.data),
+  fixtureVerifyDeliverable: (payloadOrMilestoneId?: any) => {
+    const payload =
+      typeof payloadOrMilestoneId === 'string'
+        ? { milestoneId: payloadOrMilestoneId }
+        : payloadOrMilestoneId || {};
+    return client.post('/demo/fixtures/verify-deliverable', payload).then((r) => r.data);
+  },
+  fixtureSimulateDispute: (payload?: any) =>
+    client.post('/demo/fixtures/simulate-dispute', payload || {}).then((r) => r.data),
 
   // Escrow / Milestones
   getProjects: () => client.get<any, { data: { success: boolean; data: Project[] } }>('/escrow/projects').then((r) => r.data.data),
