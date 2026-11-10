@@ -14,7 +14,8 @@
     "test:browser": "cd paypal-aegis && npm run test:browser",
     "generate:pdf": "cd paypal-aegis && npm run generate:pdf",
     "generate:changed-pdf": "cd paypal-aegis && npm run generate:changed-pdf",
-    "generate:report-pdf": "cd paypal-aegis && npm run generate:report-pdf"
+    "generate:report-pdf": "cd paypal-aegis && npm run generate:report-pdf",
+    "generate:flow-pdf": "cd paypal-aegis && npm run generate:flow-pdf"
   },
   "keywords": ["paypal", "aegis", "escrow", "dispute", "ai", "agent", "mcp"],
   "author": "",
