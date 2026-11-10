@@ -19,7 +19,8 @@
     "generate:pdf": "tsx scripts/generate-screenshots-pdf.ts",
     "generate:changed-pdf": "tsx scripts/generate-changed-pdf.ts",
     "generate:report-pdf": "tsx scripts/generate-final-report-pdf.ts",
-    "generate:flow-pdf": "tsx scripts/generate-flow-pdf.ts"
+    "generate:flow-pdf": "tsx scripts/generate-flow-pdf.ts",
+    "generate:master-pdf": "tsx scripts/generate-master-report-pdf.ts"
   },
   "keywords": [
     "paypal",
