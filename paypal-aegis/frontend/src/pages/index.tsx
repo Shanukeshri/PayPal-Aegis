@@ -61,7 +61,9 @@ export default function Dashboard() {
   useEffect(() => {
     loadDashboardData();
 
-    const socketUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
+    const socketUrl =
+      process.env.NEXT_PUBLIC_WS_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
     let socket: Socket;
 
     try {

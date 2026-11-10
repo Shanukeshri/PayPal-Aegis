@@ -1,5 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
+import path from 'path';
+import fs from 'fs';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import { config } from './config';
@@ -94,6 +96,26 @@ app.get('/health', (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Serve frontend static files if built (Next.js static export)
+const frontendCandidates = [
+  path.resolve(__dirname, '../frontend/out'),
+  path.resolve(__dirname, '../../paypal-aegis/frontend/out'),
+  path.resolve(process.cwd(), 'frontend/out'),
+  path.resolve(process.cwd(), 'paypal-aegis/frontend/out'),
+];
+const frontendDist = frontendCandidates.find((dir) => fs.existsSync(dir));
+
+if (frontendDist) {
+  logger.info(`Serving static frontend assets from: ${frontendDist}`);
+  app.use(express.static(frontendDist));
+  app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
 
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

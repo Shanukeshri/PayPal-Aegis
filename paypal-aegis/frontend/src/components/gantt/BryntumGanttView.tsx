@@ -5,6 +5,7 @@ import {
   ExclamationTriangleIcon,
   DocumentTextIcon,
 } from '@heroicons/react/24/outline';
+import api from '../../services/api';
 import type { Milestone, PayPalDispute } from '../../types';
 
 interface BryntumGanttViewProps {
@@ -213,7 +214,7 @@ export const BryntumGanttView: React.FC<BryntumGanttViewProps> = ({
                     </div>
                     <div className="flex items-center justify-end gap-2 mt-1">
                       <a
-                        href={`http://localhost:3001/api/disputes/${d.dispute_id}/evidence-pdf`}
+                        href={api.getEvidencePdfUrl(d.dispute_id)}
                         target="_blank"
                         rel="noreferrer"
                         className="px-2 py-0.5 text-[11px] bg-white hover:bg-[#F4F1EA] text-[#0070BA] border border-[#0070BA]/40 rounded flex items-center gap-1 font-semibold transition"

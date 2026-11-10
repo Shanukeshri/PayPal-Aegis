@@ -4,6 +4,7 @@
   "description": "PayPal Aegis — Autonomous Milestone Escrow, Delivery Verification & Dispute Compliance Operating System",
   "main": "dist/server.js",
   "scripts": {
+    "postinstall": "cd frontend && npm install",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "tsx watch src/server.ts",
     "dev:frontend": "cd frontend && npm run dev",

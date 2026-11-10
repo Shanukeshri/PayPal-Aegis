@@ -202,7 +202,7 @@ export const HITLApprovalDrawer: React.FC<HITLApprovalDrawerProps> = ({
                           Compiled A4 PDF: {(req.payload.pdfSizeBytes / 1024).toFixed(1)} KB (&lt;10MB Compliant)
                         </span>
                         <a
-                          href={`http://localhost:3001/api/disputes/${req.payload.disputeId || 'PP-D-40193'}/evidence-pdf`}
+                          href={api.getEvidencePdfUrl(req.payload.disputeId || 'PP-D-40193')}
                           target="_blank"
                           rel="noreferrer"
                           className="px-2.5 py-1 text-xs bg-white hover:bg-[#F4F1EA] text-[#0070BA] border border-[#0070BA]/40 rounded-md flex items-center gap-1.5 font-semibold transition"

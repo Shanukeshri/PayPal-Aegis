@@ -98,7 +98,9 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
   };
 
   const handleDownloadAuditLogs = () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:3001/api');
     window.open(`${apiUrl}/demo/audit-logs?download=true`, '_blank');
   };
 
