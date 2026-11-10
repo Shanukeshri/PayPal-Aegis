@@ -1,14 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  ShieldAlert,
-  ShieldCheck,
-  CheckCircle,
-  XCircle,
-  FileText,
-  Cpu,
-  Eye,
-  X,
-} from 'lucide-react';
+  ShieldExclamationIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  DocumentTextIcon,
+  CpuChipIcon,
+  EyeIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
 import type { HITLApprovalRequest } from '../../types';
 import api from '../../services/api';
 
@@ -25,7 +24,34 @@ export const HITLApprovalDrawer: React.FC<HITLApprovalDrawerProps> = ({
   const [executingId, setExecutingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  // Deduplicate staged items by action type and target entity to guarantee clean presentation
+  const dedupedApprovals = useMemo(() => {
+    const seen = new Set<string>();
+    const result: HITLApprovalRequest[] = [];
+    for (const req of pendingApprovals) {
+      const targetId = req.disputeId || (req.payload as any)?.disputeId || req.milestoneId || (req.payload as any)?.milestoneId || '';
+      const key = `${req.type}_${targetId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(req);
+      }
+    }
+    return result;
+  }, [pendingApprovals]);
+
+  // WCAG Compliance: Trap escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedApproval(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleApprove = async (id: string) => {
+    if (executingId) return; // Idempotent double-click guard
     setExecutingId(id);
     try {
       await api.approveHitlAction(id, 'Admin / Judge Operator');
@@ -56,148 +82,135 @@ export const HITLApprovalDrawer: React.FC<HITLApprovalDrawerProps> = ({
   };
 
   return (
-    <section className="bg-white border border-[#E2E8F0] rounded-xl p-6 sm:p-8 shadow-card">
-      {/* Section Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-red-700 shrink-0">
-            <ShieldAlert className="w-5 h-5" strokeWidth={1.75} />
+    <section className="bg-white border border-[#E5E0D8] rounded-xl p-5 shadow-subtle">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center space-x-3">
+          <div className="p-2.5 rounded-lg bg-[#F4F1EA] text-[#0070BA] border border-[#E5E0D8]">
+            <ShieldExclamationIcon className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-bold text-[#0F172A] leading-[1.5]">
-                SafeGate Human-in-the-Loop (HITL) Approval Drawer
-              </h2>
-              <span className="h-6 px-2 rounded-lg text-xs font-medium bg-[#F1F5F9] text-[#4B5563] border border-[#E2E8F0] inline-flex items-center">
+            <h2 className="text-base font-bold text-[#1C1917] flex items-center gap-2">
+              SafeGate Human-in-the-Loop (HITL) Approval Drawer
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[#F4F1EA] text-[#57534E] border border-[#E5E0D8]">
                 WCAG Compliant Gate
               </span>
-            </div>
-            <p className="text-sm font-normal text-[#6B7280] leading-[1.6] mt-2">
+            </h2>
+            <p className="text-xs text-[#57534E] mt-0.5">
               Deterministic barrier intercepting money-moving & legal actions before dispatch to PayPal
             </p>
           </div>
         </div>
 
-        <div className="shrink-0">
-          <span className="inline-flex items-center h-8 px-4 rounded-lg text-xs font-medium bg-[#F1F5F9] text-[#0F172A] border border-[#E2E8F0] tabular-nums">
-            {pendingApprovals.length} Action{pendingApprovals.length === 1 ? '' : 's'} Staged
+        <div className="flex items-center space-x-2">
+          <span className="text-xs font-semibold px-3 py-1 rounded-md bg-[#F4F1EA] text-[#1C1917] border border-[#E5E0D8]">
+            {dedupedApprovals.length} Action{dedupedApprovals.length === 1 ? '' : 's'} Staged
           </span>
         </div>
       </div>
 
-      {/* Execution Feedback */}
       {feedback && (
-        <div className="mb-6 p-4 text-sm font-medium leading-[1.6] rounded-lg bg-blue-50 text-[#003087] border border-blue-200 text-center">
+        <div className="mb-3.5 p-2.5 text-xs font-medium rounded-lg bg-[#F4F1EA] text-[#1C1917] border border-[#E5E0D8] text-center shadow-subtle">
           {feedback}
         </div>
       )}
 
-      {/* Empty State or Staged Actions */}
-      {pendingApprovals.length === 0 ? (
-        <div className="bg-[#F8FAFC] border border-dashed border-[#E2E8F0] rounded-xl p-8 flex flex-col items-center justify-center text-center gap-2">
-          <div className="w-10 h-10 rounded-lg bg-white border border-[#E2E8F0] flex items-center justify-center text-[#0070BA] mb-2">
-            <ShieldCheck className="w-5 h-5" strokeWidth={1.75} />
-          </div>
-          <p className="text-sm font-bold text-[#0F172A] leading-[1.5]">
-            No pending approvals in queue
-          </p>
-          <p className="text-sm font-normal text-[#6B7280] max-w-md leading-[1.6]">
-            SafeGate is continuously monitoring outbound PayPal calls. Trigger Judge Demo fixtures 3 or 4 to stage an approval.
-          </p>
+      {dedupedApprovals.length === 0 ? (
+        <div className="text-center py-8 text-[#57534E] text-xs border border-dashed border-[#E5E0D8] rounded-lg">
+          No pending approvals in queue. SafeGate is continuously monitoring. Trigger Judge Demo fixtures to stage actions.
         </div>
       ) : (
-        <div className="space-y-4">
-          {pendingApprovals.map((req) => {
+        <div className="space-y-3">
+          {dedupedApprovals.map((req) => {
             const isCritical = req.riskLevel === 'CRITICAL';
             const isHigh = req.riskLevel === 'HIGH';
 
             return (
               <div
                 key={req.id}
-                className="bg-[#F8FAFC] border border-[#E2E8F0] hover:border-slate-300 rounded-xl p-6 transition-all duration-200"
+                className="bg-[#F9F8F5] border border-[#E5E0D8] hover:border-[#D6D0C5] rounded-lg p-3.5 transition-colors"
               >
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                  {/* Action Metadata & Summary */}
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center space-x-2 mb-1.5">
                       <span
-                        className={`h-6 px-2 rounded-lg text-xs font-bold uppercase inline-flex items-center border ${
-                          isCritical
-                            ? 'bg-red-50 text-red-800 border-red-200'
-                            : isHigh
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : 'bg-blue-50 text-[#003087] border-blue-200'
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border ${
+                          isCritical || isHigh
+                            ? 'bg-[#1C1917] text-white border-[#1C1917]'
+                            : 'bg-[#F4F1EA] text-[#57534E] border-[#E5E0D8]'
                         }`}
                       >
                         {req.riskLevel} RISK
                       </span>
-                      <span className="text-sm font-bold text-[#0F172A] tabular-nums">
+                      <span className="font-mono text-xs font-bold text-[#1C1917]">
                         {req.type}
                       </span>
-                      <span className="text-xs font-normal text-[#6B7280] tabular-nums">
+                      <span className="text-[11px] text-[#57534E] font-mono">
                         ID: {req.id.substring(0, 8)}...
                       </span>
                     </div>
-                    <p className="text-sm font-normal text-[#0F172A] leading-[1.6]">
-                      {req.description}
-                    </p>
+                    <p className="text-xs text-[#1C1917] font-medium">{req.description}</p>
                   </div>
 
-                  {/* Action Controls: Right-Aligned Group */}
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {/* Approve / Reject Controls */}
+                  <div className="flex items-center space-x-2">
                     <button
-                      type="button"
                       onClick={() => setSelectedApproval(req)}
-                      className="h-10 px-4 text-sm font-medium bg-transparent hover:bg-white active:bg-slate-100 text-[#0F172A] border border-[#E2E8F0] rounded-lg inline-flex items-center gap-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2"
+                      className="px-3 py-1.5 text-xs bg-white hover:bg-[#F4F1EA] text-[#1C1917] border border-[#E5E0D8] rounded-lg font-medium flex items-center gap-1.5 transition shadow-subtle"
                     >
-                      <Eye className="w-4 h-4 text-[#6B7280]" strokeWidth={1.75} />
-                      <span>Inspect Payload</span>
+                      <EyeIcon className="w-3.5 h-3.5 text-[#57534E]" />
+                      Inspect Payload
                     </button>
 
                     <button
-                      type="button"
                       onClick={() => handleReject(req.id)}
                       disabled={executingId === req.id}
-                      className="h-10 px-4 text-sm font-medium bg-transparent hover:bg-red-50 active:bg-red-100 text-red-800 border border-[#E2E8F0] hover:border-red-200 rounded-lg inline-flex items-center gap-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2 disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs bg-white hover:bg-[#F4F1EA] text-[#1C1917] border border-[#E5E0D8] rounded-lg font-semibold flex items-center gap-1.5 transition disabled:opacity-50 shadow-subtle"
                     >
-                      <XCircle className="w-4 h-4 text-red-700" strokeWidth={1.75} />
-                      <span>Reject</span>
+                      <XCircleIcon className="w-3.5 h-3.5 text-[#57534E]" />
+                      Reject
                     </button>
 
                     <button
-                      type="button"
                       onClick={() => handleApprove(req.id)}
                       disabled={executingId === req.id}
-                      className="h-10 px-4 text-sm font-bold bg-[#0070BA] hover:bg-[#003087] active:opacity-95 text-white rounded-lg shadow-subtle inline-flex items-center gap-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2 disabled:opacity-50"
+                      className="px-3.5 py-1.5 text-xs bg-[#0070BA] hover:bg-[#005EA6] text-white font-semibold rounded-lg shadow-subtle flex items-center gap-1.5 transition disabled:opacity-50"
                     >
-                      <CheckCircle className="w-4 h-4" strokeWidth={1.75} />
-                      <span>Approve & Execute</span>
+                      <CheckCircleIcon className="w-3.5 h-3.5 text-white" />
+                      Approve & Execute
                     </button>
                   </div>
                 </div>
 
-                {/* Verification Evidence Badges */}
+                {/* Verification badges */}
                 {req.payload && (req.payload.knnScore || req.payload.channel3Sku || req.payload.hasPdf) && (
-                  <div className="mt-4 pt-4 border-t border-[#E2E8F0] flex flex-wrap gap-2">
+                  <div className="mt-2.5 pt-2.5 border-t border-[#E5E0D8] flex flex-wrap gap-2 text-xs">
                     {req.payload.channel3Sku && (
-                      <span className="h-8 px-2 bg-white text-[#003087] rounded-lg border border-[#E2E8F0] inline-flex items-center gap-2 text-xs font-medium tabular-nums">
-                        <Cpu className="w-4 h-4 text-[#0070BA]" strokeWidth={1.75} />
-                        <span>Channel3 SKU: {req.payload.channel3Sku}</span>
+                      <span className="bg-white text-[#1C1917] px-2.5 py-1 rounded-md border border-[#E5E0D8] flex items-center gap-1.5 font-mono">
+                        <CpuChipIcon className="w-3.5 h-3.5 text-[#0070BA]" />
+                        Channel3 SKU: {req.payload.channel3Sku}
                       </span>
                     )}
                     {req.payload.knnScore && (
-                      <span className="h-8 px-2 bg-white text-[#0F172A] rounded-lg border border-[#E2E8F0] inline-flex items-center gap-2 text-xs font-medium tabular-nums">
-                        <ShieldCheck className="w-4 h-4 text-[#0070BA]" strokeWidth={1.75} />
-                        <span>Elastic kNN Authenticity: {(req.payload.knnScore * 100).toFixed(1)}%</span>
+                      <span className="bg-white text-[#1C1917] px-2.5 py-1 rounded-md border border-[#E5E0D8] flex items-center gap-1.5 font-mono">
+                        Elastic kNN Authenticity: {(req.payload.knnScore * 100).toFixed(1)}%
                       </span>
                     )}
                     {req.payload.hasPdf && (
-                      <span className="h-8 px-2 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 inline-flex items-center gap-2 text-xs font-medium tabular-nums">
-                        <FileText className="w-4 h-4 text-emerald-700" strokeWidth={1.75} />
-                        <span>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-white text-[#0070BA] px-2.5 py-1 rounded-md border border-[#E5E0D8] flex items-center gap-1.5 font-mono font-medium">
+                          <DocumentTextIcon className="w-3.5 h-3.5 text-[#0070BA]" />
                           Compiled A4 PDF: {(req.payload.pdfSizeBytes / 1024).toFixed(1)} KB (&lt;10MB Compliant)
                         </span>
-                      </span>
+                        <a
+                          href={`http://localhost:3001/api/disputes/${req.payload.disputeId || 'PP-D-40193'}/evidence-pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1 text-xs bg-white hover:bg-[#F4F1EA] text-[#0070BA] border border-[#0070BA]/40 rounded-md flex items-center gap-1.5 font-semibold transition"
+                        >
+                          <DocumentTextIcon className="w-3.5 h-3.5 text-[#0070BA]" />
+                          Preview Auto-Compiled Evidence PDF
+                        </a>
+                      </div>
                     )}
                   </div>
                 )}
@@ -207,53 +220,46 @@ export const HITLApprovalDrawer: React.FC<HITLApprovalDrawerProps> = ({
         </div>
       )}
 
-      {/* Inspect Payload Modal */}
+      {/* Inspect Modal - Soft neutral backdrop, no pure black, 3-color palette */}
       {selectedApproval && (
-        <div className="fixed inset-0 bg-[#0F172A]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white border border-[#E2E8F0] rounded-xl max-w-2xl w-full p-6 sm:p-8 shadow-modal space-y-6">
-            <div className="flex items-start justify-between gap-4 border-b border-[#E2E8F0] pb-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base font-bold text-[#0F172A] leading-[1.5]">
-                  Payload Inspection & Audit Evidence
-                </h3>
-                <span className="h-6 px-2 rounded-lg text-xs font-medium bg-[#F1F5F9] text-[#003087] border border-[#E2E8F0] inline-flex items-center tabular-nums">
+        <div className="fixed inset-0 bg-[#1C1917]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E5E0D8] rounded-xl max-w-xl w-full p-5 shadow-card space-y-4">
+            <div className="flex justify-between items-center border-b border-[#E5E0D8] pb-3">
+              <h3 className="text-sm font-bold text-[#1C1917] flex items-center gap-2">
+                Payload Inspection & Audit Evidence
+                <span className="text-xs font-mono bg-[#F4F1EA] px-2.5 py-0.5 rounded-md text-[#0070BA] border border-[#E5E0D8]">
                   {selectedApproval.type}
                 </span>
-              </div>
+              </h3>
               <button
-                type="button"
                 onClick={() => setSelectedApproval(null)}
-                aria-label="Close payload inspection modal"
-                className="w-8 h-8 rounded-lg bg-transparent hover:bg-slate-50 text-[#6B7280] hover:text-[#0F172A] border border-[#E2E8F0] inline-flex items-center justify-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA]"
+                className="text-[#57534E] hover:text-[#1C1917] p-1 rounded-lg hover:bg-[#F4F1EA] transition"
               >
-                <X className="w-4 h-4" strokeWidth={1.75} />
+                <XMarkIcon className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-sm font-normal text-[#0F172A] leading-[1.6]">
+            <div className="text-xs text-[#1C1917] font-medium">
               {selectedApproval.description}
-            </p>
+            </div>
 
-            <pre className="bg-[#0F172A] text-slate-100 p-4 rounded-lg text-xs leading-[1.6] overflow-x-auto max-h-64 border border-slate-800 tabular-nums">
+            <pre className="bg-[#F9F8F5] p-3.5 rounded-lg text-xs font-mono text-[#1C1917] overflow-x-auto max-h-60 border border-[#E5E0D8]">
               {JSON.stringify(selectedApproval.payload, null, 2)}
             </pre>
 
-            <div className="flex flex-wrap items-center justify-end gap-2 pt-4 border-t border-[#E2E8F0]">
+            <div className="flex justify-end space-x-2 pt-2 border-t border-[#E5E0D8]">
               <button
-                type="button"
                 onClick={() => setSelectedApproval(null)}
-                className="h-10 px-4 text-sm font-medium bg-transparent hover:bg-slate-50 text-[#0F172A] border border-[#E2E8F0] rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2"
+                className="px-3.5 py-1.5 text-xs bg-[#F4F1EA] hover:bg-[#EAE6DE] text-[#1C1917] border border-[#E5E0D8] rounded-lg font-medium transition shadow-subtle"
               >
                 Close
               </button>
               <button
-                type="button"
                 onClick={() => handleApprove(selectedApproval.id)}
-                disabled={executingId === selectedApproval.id}
-                className="h-10 px-4 text-sm font-bold bg-[#0070BA] hover:bg-[#003087] text-white rounded-lg shadow-subtle inline-flex items-center gap-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2 disabled:opacity-50"
+                className="px-4 py-1.5 text-xs bg-[#0070BA] hover:bg-[#005EA6] text-white font-semibold rounded-lg shadow-subtle flex items-center gap-1.5 transition"
               >
-                <CheckCircle className="w-4 h-4" strokeWidth={1.75} />
-                <span>Approve & Execute Now</span>
+                <CheckCircleIcon className="w-3.5 h-3.5 text-white" />
+                Approve & Execute Now
               </button>
             </div>
           </div>

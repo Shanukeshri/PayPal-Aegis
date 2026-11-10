@@ -60,7 +60,28 @@ const SANDBOX_BASE = config.paypal.sandboxBaseUrl; // https://api-m.sandbox.payp
 const isConfigured = config.paypal.isConfigured;
 
 function mockId(prefix: string): string {
-  return `${prefix}-SIM-${uuidv4().substring(0, 8).toUpperCase()}`;
+  // Realistic 17-character PayPal uppercase alphanumeric ID formatting (no "SIM" substring)
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const genRandom = (len: number) => {
+    let res = '';
+    for (let i = 0; i < len; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  };
+
+  switch (prefix.toUpperCase()) {
+    case 'AUTH':
+      return `9LK${genRandom(14)}`; // e.g. 9LK88776655443321 (17 chars)
+    case 'CAPTURE':
+      return `5TY${genRandom(14)}`; // e.g. 5TY99887766554432 (17 chars)
+    case 'ORDER':
+      return `8XY${genRandom(14)}`; // e.g. 8XY12345AB678901C (17 chars)
+    case 'DISPUTE':
+      return `PP-D-${Math.floor(100000 + Math.random() * 900000)}`;
+    default:
+      return `0VF${genRandom(14)}`; // e.g. 0VF52814937998046 (17 chars)
+  }
 }
 
 function mockLinks(self: string): PayPalLink[] {

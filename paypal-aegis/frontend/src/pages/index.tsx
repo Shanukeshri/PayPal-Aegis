@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import { io, Socket } from 'socket.io-client';
-import { ShieldCheck, DollarSign, Lock, AlertTriangle } from 'lucide-react';
+import {
+  ShieldCheckIcon,
+  CurrencyDollarIcon,
+  LockClosedIcon,
+  ExclamationTriangleIcon,
+} from '@heroicons/react/24/outline';
 import api from '../services/api';
 import JudgeDemoToolbar from '../components/toolbar/JudgeDemoToolbar';
 import DisputeRatioRadar from '../components/dashboard/DisputeRatioRadar';
@@ -120,7 +125,7 @@ export default function Dashboard() {
     .reduce((sum, m) => sum + parseFloat(m.amount.value || '0'), 0);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F9F8F5] text-[#1C1917] flex flex-col font-sans">
       <Head>
         <title>PayPal Aegis — Milestone Escrow & Dispute Compliance OS</title>
         <meta
@@ -140,85 +145,82 @@ export default function Dashboard() {
         }}
       />
 
-      {/* Main Constrained Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
-        {/* Executive KPI Summary Grid */}
-        <section
-          aria-label="Executive escrow metrics"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
-        >
-          {/* Card 1: Active Escrow Holds */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-card flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wider leading-[1.5] block">
+      {/* Main Container - 60-30-10 palette: Primary (#F9F8F5), Secondary (#FFFFFF / #1C1917 / #E5E0D8), Accent (#0070BA) */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {/* Executive Header Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Protected Escrow Funds */}
+          <div className="bg-white border border-[#E5E0D8] rounded-xl p-4 shadow-subtle flex items-center justify-between hover:border-[#D6D0C5] transition-colors">
+            <div>
+              <span className="text-xs font-semibold text-[#57534E] uppercase tracking-wider block">
                 Active Escrow Holds
               </span>
-              <span className="text-2xl font-bold text-[#0F172A] tabular-nums leading-[1.25] block mt-2">
-                {loading ? '—' : `$${totalLockedAmount.toFixed(2)} USD`}
+              <span className="text-xl font-bold text-[#1C1917] font-mono mt-0.5 block">
+                ${totalLockedAmount.toFixed(2)} USD
               </span>
-              <span className="text-xs font-normal text-[#6B7280] leading-[1.5] block mt-2">
-                intent: &ldquo;AUTHORIZE&rdquo; holds
+              <span className="text-xs text-[#57534E] block mt-1">
+                intent: "AUTHORIZE" holds
               </span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-blue-50 text-[#0070BA] border border-blue-200 flex items-center justify-center shrink-0">
-              <Lock className="w-5 h-5" strokeWidth={1.75} />
+            <div className="p-3 bg-[#F4F1EA] text-[#0070BA] rounded-lg border border-[#E5E0D8]">
+              <LockClosedIcon className="w-5 h-5" />
             </div>
           </div>
 
-          {/* Card 2: Settled Milestones */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-card flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wider leading-[1.5] block">
+          {/* Card 2: Captured Milestone Funds */}
+          <div className="bg-white border border-[#E5E0D8] rounded-xl p-4 shadow-subtle flex items-center justify-between hover:border-[#D6D0C5] transition-colors">
+            <div>
+              <span className="text-xs font-semibold text-[#57534E] uppercase tracking-wider block">
                 Settled Milestones
               </span>
-              <span className="text-2xl font-bold text-[#0F172A] tabular-nums leading-[1.25] block mt-2">
-                {loading ? '—' : `$${totalCapturedAmount.toFixed(2)} USD`}
+              <span className="text-xl font-bold text-[#0070BA] font-mono mt-0.5 block">
+                ${totalCapturedAmount.toFixed(2)} USD
               </span>
-              <span className="text-xs font-normal text-[#6B7280] leading-[1.5] block mt-2">
+              <span className="text-xs text-[#57534E] block mt-1">
                 Evidence-verified captures
               </span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0">
-              <DollarSign className="w-5 h-5" strokeWidth={1.75} />
+            <div className="p-3 bg-[#F4F1EA] text-[#0070BA] rounded-lg border border-[#E5E0D8]">
+              <CurrencyDollarIcon className="w-5 h-5" />
             </div>
           </div>
 
           {/* Card 3: Rolling 90-Day Dispute Ratio */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-card flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wider leading-[1.5] block">
+          <div className="bg-white border border-[#E5E0D8] rounded-xl p-4 shadow-subtle flex items-center justify-between hover:border-[#D6D0C5] transition-colors">
+            <div>
+              <span className="text-xs font-semibold text-[#57534E] uppercase tracking-wider block">
                 Dispute Ratio Radar
               </span>
-              <span className="text-2xl font-bold text-[#0F172A] tabular-nums leading-[1.25] block mt-2">
-                {ratioSnapshot ? `${(ratioSnapshot.ratio * 100).toFixed(2)}%` : '1.33%'}
+              <span className="text-xl font-bold text-[#1C1917] font-mono mt-0.5 block">
+                {ratioSnapshot ? (ratioSnapshot.ratio * 100).toFixed(2) + '%' : '1.33%'}
               </span>
-              <span className="text-xs font-normal text-[#6B7280] leading-[1.5] block mt-2">
+              <span className="text-xs text-[#57534E] block mt-1">
                 1.5% High Volume Threshold
               </span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-5 h-5" strokeWidth={1.75} />
+            <div className="p-3 bg-[#F4F1EA] text-[#1C1917] rounded-lg border border-[#E5E0D8]">
+              <ExclamationTriangleIcon className="w-5 h-5" />
             </div>
           </div>
 
           {/* Card 4: HITL Gate Queue */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-card flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wider leading-[1.5] block">
+          <div className="bg-white border border-[#E5E0D8] rounded-xl p-4 shadow-subtle flex items-center justify-between hover:border-[#D6D0C5] transition-colors">
+            <div>
+              <span className="text-xs font-semibold text-[#57534E] uppercase tracking-wider block">
                 HITL Approval Gate
               </span>
-              <span className="text-2xl font-bold text-[#0F172A] tabular-nums leading-[1.25] block mt-2">
-                {pendingApprovals.length} Actions
+              <span className="text-xl font-bold text-[#1C1917] font-mono mt-0.5 block">
+                {pendingApprovals.length} Action{pendingApprovals.length === 1 ? '' : 's'}
               </span>
-              <span className="text-xs font-normal text-[#6B7280] leading-[1.5] block mt-2">
+              <span className="text-xs text-[#57534E] block mt-1">
                 Awaiting Human Confirmation
               </span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-[#F1F5F9] text-[#0F172A] border border-[#E2E8F0] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5" strokeWidth={1.75} />
+            <div className="p-3 bg-[#F4F1EA] text-[#1C1917] rounded-lg border border-[#E5E0D8]">
+              <ShieldCheckIcon className="w-5 h-5" />
             </div>
           </div>
-        </section>
+        </div>
 
         {/* 1.5% Dispute Ratio Radar Component */}
         <DisputeRatioRadar ratioSnapshot={ratioSnapshot} />
@@ -241,24 +243,14 @@ export default function Dashboard() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#E2E8F0] bg-white py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 flex flex-wrap items-center justify-between gap-4 text-xs text-[#6B7280] leading-[1.5]">
+      <footer className="border-t border-[#E5E0D8] bg-[#F4F1EA] py-4 px-6 text-center text-xs text-[#57534E]">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <span>
-            <strong className="font-bold text-[#0F172A]">PayPal Aegis</strong> — Built for the PayPal AI Hackathon (Build What&apos;s Next with PayPal &amp; AI).
+            <strong className="text-[#1C1917]">PayPal Aegis</strong> — Built for the PayPal AI Hackathon (Build What's Next with PayPal & AI).
           </span>
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="inline-flex items-center gap-2">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  socketConnected ? 'bg-emerald-600' : 'bg-slate-400'
-                }`}
-              />
-              <span>{socketConnected ? 'Realtime Sync Connected' : 'Realtime Sync Standby'}</span>
-            </span>
-            <span>
-              APIMatic Context Grounded • AG Studio 3 • Bryntum Suite • Channel3 • Elastic Cloud • Render Workflows
-            </span>
-          </div>
+          <span className="font-mono text-[11px] text-[#57534E]">
+            APIMatic Context Grounded • AG Studio 3 • Bryntum Suite • Channel3 • Elastic Cloud • Render Workflows
+          </span>
         </div>
       </footer>
     </div>

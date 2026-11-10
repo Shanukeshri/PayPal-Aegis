@@ -7,40 +7,33 @@ module.exports = {
   ],
   theme: {
     extend: {
-      fontFamily: {
-        sans: [
-          'var(--font-inter)',
-          'Inter',
-          '-apple-system',
-          'BlinkMacSystemFont',
-          '"Segoe UI"',
-          'Roboto',
-          'sans-serif',
-        ],
-      },
       colors: {
-        paypal: {
-          blue: '#0070BA',
-          darkBlue: '#003087',
-          tint: '#EFF6FF',
+        // 3-Color Strict Palette:
+        // 1. Primary: Very light colour near white, slight beige-like
+        primary: {
+          DEFAULT: '#F9F8F5',
+          light: '#FDFCFB',
+          dark: '#F2EFE9',
         },
-        aegis: {
-          bg: '#F8FAFC',
-          surface: '#FFFFFF',
-          subtle: '#F1F5F9',
-          border: '#E2E8F0',
-          ink: '#0F172A',
-          muted: '#6B7280',
-          accent: '#0070BA',
-          danger: '#DC2626',
-          warning: '#D97706',
-          success: '#059669',
+        // 2. Secondary: Structural color (cards, borders, text)
+        secondary: {
+          DEFAULT: '#1C1917',
+          card: '#FFFFFF',
+          surface: '#F4F1EA',
+          border: '#E5E0D8',
+          muted: '#57534E',
+          subtle: '#78716C',
+        },
+        // 3. Accent: Intentional PayPal brand blue for action items
+        accent: {
+          DEFAULT: '#0070BA',
+          hover: '#005EA6',
+          light: '#E6F2FA',
         },
       },
       boxShadow: {
-        subtle: '0 1px 2px rgba(0, 0, 0, 0.04)',
-        card: '0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03)',
-        modal: '0 16px 32px rgba(15, 23, 42, 0.12)',
+        subtle: '0 1px 3px 0 rgba(28, 25, 23, 0.04), 0 1px 2px -1px rgba(28, 25, 23, 0.03)',
+        card: '0 4px 6px -1px rgba(28, 25, 23, 0.04), 0 2px 4px -2px rgba(28, 25, 23, 0.03)',
       },
     },
   },

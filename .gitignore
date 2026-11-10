@@ -56,9 +56,20 @@ coverage/
 tmp/
 temp/
 
-# Markdown Documentation (ignore all .md except README.md)
+# Markdown Documentation
 *.md
 !README.md
 !README*.md
+!report.md
+!tests1.md
+!tests2.md
+!DEVPOST_SUBMISSION.md
+!DEMO_VIDEO_SCRIPT.md
+!APIMATIC_INTEGRATION.md
+!COMPLETE_IMPLEMENTATION_GUIDE.md
+
+# Generated PDFs
+*.pdf
+
 
 

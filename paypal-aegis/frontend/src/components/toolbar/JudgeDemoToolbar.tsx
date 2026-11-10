@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import {
-  Play,
-  FastForward,
-  CheckCircle2,
-  AlertTriangle,
-  RotateCcw,
-  ShieldCheck,
-  Zap,
-  Info,
-} from 'lucide-react';
+  PlayIcon,
+  ForwardIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon,
+  ShieldCheckIcon,
+  BoltIcon,
+  ArrowDownTrayIcon,
+} from '@heroicons/react/24/outline';
 import api from '../../services/api';
 
 interface JudgeDemoToolbarProps {
@@ -25,10 +25,7 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
   statusInfo,
 }) => {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
-  const [bannerMessage, setBannerMessage] = useState<{
-    text: string;
-    type: 'success' | 'info' | 'warning';
-  } | null>(null);
+  const [bannerMessage, setBannerMessage] = useState<{ text: string; type: 'success' | 'info' | 'warning' } | null>(null);
 
   const showBanner = (text: string, type: 'success' | 'info' | 'warning' = 'success') => {
     setBannerMessage({ text, type });
@@ -65,10 +62,7 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
     setLoadingAction('verify');
     try {
       const res = await api.fixtureVerifyDeliverable();
-      showBanner(
-        res.message || 'Deliverable verified via Channel3 & Elastic. Capture staged in HITL queue.',
-        'success'
-      );
+      showBanner(res.message || 'Deliverable verified via Channel3 & Elastic. Capture staged in HITL queue.', 'success');
       onActionComplete();
     } catch (err: any) {
       showBanner(err.message || 'Error running fixture', 'warning');
@@ -103,152 +97,120 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
     }
   };
 
+  const handleDownloadAuditLogs = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    window.open(`${apiUrl}/demo/audit-logs?download=true`, '_blank');
+  };
+
   const isSimulated = statusInfo.mode === 'DETERMINISTIC_SIMULATION';
 
   return (
-    <header className="bg-white border-b border-[#E2E8F0] shadow-subtle sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-8">
-        {/* Primary Navigation Row */}
-        <div className="py-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Brand Lockup */}
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[#0070BA] flex items-center justify-center text-white shrink-0">
-                <ShieldCheck className="w-5 h-5" strokeWidth={1.75} />
-              </div>
-              <div>
-                <span className="text-base font-bold text-[#0F172A] leading-[1.5] block">
-                  PayPal Aegis
-                </span>
-                <span className="text-xs font-normal text-[#6B7280] leading-[1.5] block">
-                  Command OS
-                </span>
-              </div>
+    <header className="bg-white border-b border-[#E5E0D8] px-4 py-3 sticky top-0 z-50 shadow-subtle">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+        {/* Brand identity & Environment status */}
+        <div className="flex items-center space-x-3.5">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-9 h-9 rounded-lg bg-[#0070BA] flex items-center justify-center font-bold text-white shadow-subtle">
+              <ShieldCheckIcon className="w-5 h-5 text-white" />
             </div>
-
-            <div className="hidden sm:block h-8 w-px bg-[#E2E8F0]" aria-hidden="true" />
-
-            {/* Environment & HITL Status Pills */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-2 h-8 px-2 rounded-lg text-xs font-medium border ${
-                  isSimulated
-                    ? 'bg-amber-50 text-amber-800 border-amber-200'
-                    : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isSimulated ? 'bg-amber-600' : 'bg-emerald-600'
-                  }`}
-                />
-                {isSimulated ? 'Deterministic Simulation' : 'PayPal Live Sandbox'}
+            <div>
+              <span className="font-bold text-base tracking-tight text-[#1C1917] block">
+                PayPal Aegis
               </span>
-
-              {statusInfo.pendingApprovalsCount ? (
-                <span className="inline-flex items-center gap-2 h-8 px-2 rounded-lg text-xs font-bold bg-red-50 text-red-800 border border-red-200 tabular-nums">
-                  <AlertTriangle className="w-4 h-4 text-red-700" strokeWidth={1.75} />
-                  {statusInfo.pendingApprovalsCount} HITL Pending
-                </span>
-              ) : null}
+              <span className="text-[11px] text-[#57534E] font-medium">
+                Autonomous Escrow OS
+              </span>
             </div>
           </div>
 
-          {/* Utility Reset Control */}
+          <div className="flex items-center space-x-2 border-l border-[#E5E0D8] pl-3.5">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border bg-[#F4F1EA] text-[#1C1917] border-[#E5E0D8]">
+              <span className="w-2 h-2 rounded-full mr-2 bg-[#0070BA]"></span>
+              {isSimulated ? 'PayPal Sandbox Mode' : 'PayPal Live Sandbox'}
+            </span>
+
+            {statusInfo.pendingApprovalsCount ? (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-[#F4F1EA] text-[#0070BA] border border-[#0070BA]/30">
+                <ExclamationTriangleIcon className="w-3.5 h-3.5 mr-1.5 text-[#0070BA]" />
+                {statusInfo.pendingApprovalsCount} Action{statusInfo.pendingApprovalsCount === 1 ? '' : 's'} Pending
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* 1-Click Judge Demo Toolbar Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs uppercase tracking-wider text-[#57534E] font-semibold mr-1.5 flex items-center gap-1.5">
+            <BoltIcon className="w-4 h-4 text-[#57534E]" />
+            Judge Demo Fixtures:
+          </span>
+
           <button
-            type="button"
+            onClick={handleSeedContract}
+            disabled={!!loadingAction}
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#0070BA] hover:bg-[#005EA6] text-white shadow-subtle transition disabled:opacity-50"
+            title="Step 1: Ingests SOW into Gantt and creates PayPal Orders v2 intent: AUTHORIZE hold"
+          >
+            <PlayIcon className="w-3.5 h-3.5 text-white" />
+            <span>1. Seed Contract & Hold</span>
+          </button>
+
+          <button
+            onClick={handleFastForwardDay3}
+            disabled={!!loadingAction}
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-[#F4F1EA] text-[#1C1917] border border-[#E5E0D8] shadow-subtle transition disabled:opacity-50"
+            title="Step 2: Fast-forwards 72h timer, mutates authorization_id, updates pointer in ledger"
+          >
+            <ForwardIcon className="w-3.5 h-3.5 text-[#0070BA]" />
+            <span>2. Fast-Forward Day-3</span>
+          </button>
+
+          <button
+            onClick={handleVerifyDeliverable}
+            disabled={!!loadingAction}
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-[#F4F1EA] text-[#1C1917] border border-[#E5E0D8] shadow-subtle transition disabled:opacity-50"
+            title="Step 3: Queries Channel3 100M+ SKUs & Elastic kNN vector embeddings, stages capture in HITL"
+          >
+            <CheckCircleIcon className="w-3.5 h-3.5 text-[#0070BA]" />
+            <span>3. Verify Deliverable</span>
+          </button>
+
+          <button
+            onClick={handleSimulateDispute}
+            disabled={!!loadingAction}
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-[#F4F1EA] text-[#1C1917] border border-[#E5E0D8] shadow-subtle transition disabled:opacity-50"
+            title="Step 4: Injects SNAD dispute at 1.42% ratio; tests $0 make-offer vs auto-compiled A4 PDF"
+          >
+            <ExclamationTriangleIcon className="w-3.5 h-3.5 text-[#57534E]" />
+            <span>4. Simulate Dispute (1.42%)</span>
+          </button>
+
+          <button
+            onClick={handleDownloadAuditLogs}
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#F4F1EA] hover:bg-[#E5E0D8] text-[#1C1917] border border-[#0070BA]/30 shadow-subtle transition"
+            title="Download Live E2E Audit Logs (.json) for Judge Review"
+          >
+            <ArrowDownTrayIcon className="w-3.5 h-3.5 text-[#0070BA]" />
+            <span>Download Live E2E Audit Logs (.json)</span>
+          </button>
+
+          <button
             onClick={handleReset}
             disabled={!!loadingAction}
-            className="h-10 px-4 rounded-lg bg-transparent hover:bg-slate-50 active:bg-slate-100 text-[#0F172A] border border-[#E2E8F0] text-sm font-medium inline-flex items-center gap-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2 disabled:opacity-50"
+            className="p-2 text-xs rounded-lg bg-white hover:bg-[#F4F1EA] text-[#57534E] hover:text-[#1C1917] border border-[#E5E0D8] shadow-subtle transition"
             title="Reset store to clean demo state"
           >
-            <RotateCcw className="w-4 h-4 text-[#6B7280]" strokeWidth={1.75} />
-            <span>Reset</span>
+            <ArrowPathIcon className="w-4 h-4" />
           </button>
         </div>
-
-        {/* 1-Click Judge Demo Fixtures Bar */}
-        <div className="py-4 border-t border-[#E2E8F0]">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap className="w-4 h-4 text-[#0070BA]" strokeWidth={1.75} />
-            <span className="text-xs font-medium uppercase tracking-wider text-[#6B7280] leading-[1.5]">
-              Judge Demo Fixtures
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {/* Primary CTA: Solid Brand Fill */}
-            <button
-              type="button"
-              onClick={handleSeedContract}
-              disabled={!!loadingAction}
-              className="h-10 px-4 rounded-lg bg-[#0070BA] hover:bg-[#003087] active:opacity-95 text-white text-xs font-bold inline-flex items-center justify-center gap-2 shadow-subtle transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2 disabled:opacity-50"
-              title="Step 1: Ingests SOW into Gantt and creates PayPal Orders v2 intent: AUTHORIZE hold"
-            >
-              <Play className="w-4 h-4 shrink-0" strokeWidth={1.75} />
-              <span className="truncate">1. Seed Contract & Lock Hold</span>
-            </button>
-
-            {/* Secondary Actions: Transparent with Subtle Border */}
-            <button
-              type="button"
-              onClick={handleFastForwardDay3}
-              disabled={!!loadingAction}
-              className="h-10 px-4 rounded-lg bg-transparent hover:bg-slate-50 active:bg-slate-100 text-[#0F172A] border border-[#E2E8F0] text-xs font-medium inline-flex items-center justify-center gap-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2 disabled:opacity-50"
-              title="Step 2: Fast-forwards 72h timer, mutates authorization_id, updates pointer in ledger"
-            >
-              <FastForward className="w-4 h-4 text-[#0070BA] shrink-0" strokeWidth={1.75} />
-              <span className="truncate">2. Fast-Forward Day-3 (Rotate ID)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleVerifyDeliverable}
-              disabled={!!loadingAction}
-              className="h-10 px-4 rounded-lg bg-transparent hover:bg-slate-50 active:bg-slate-100 text-[#0F172A] border border-[#E2E8F0] text-xs font-medium inline-flex items-center justify-center gap-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2 disabled:opacity-50"
-              title="Step 3: Queries Channel3 100M+ SKUs & Elastic kNN vector embeddings, stages capture in HITL"
-            >
-              <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" strokeWidth={1.75} />
-              <span className="truncate">3. Verify Deliverable (Channel3 + Elastic)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSimulateDispute}
-              disabled={!!loadingAction}
-              className="h-10 px-4 rounded-lg bg-transparent hover:bg-red-50 active:bg-red-100 text-red-800 border border-[#E2E8F0] hover:border-red-200 text-xs font-medium inline-flex items-center justify-center gap-2 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0070BA] focus-visible:ring-offset-2 disabled:opacity-50"
-              title="Step 4: Injects SNAD dispute at 1.42% ratio; tests $0 make-offer vs auto-compiled A4 PDF"
-            >
-              <AlertTriangle className="w-4 h-4 text-red-700 shrink-0" strokeWidth={1.75} />
-              <span className="truncate">4. Simulate SNAD Dispute (1.42% Ratio)</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Inline Feedback Banner */}
-        {bannerMessage && (
-          <div className="pb-4">
-            <div
-              className={`p-4 rounded-lg text-sm font-medium leading-[1.6] border flex items-center justify-center gap-2 transition-all duration-200 ${
-                bannerMessage.type === 'success'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : bannerMessage.type === 'warning'
-                  ? 'bg-red-50 text-red-800 border-red-200'
-                  : 'bg-blue-50 text-[#003087] border-blue-200'
-              }`}
-            >
-              {bannerMessage.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0" strokeWidth={1.75} />
-              ) : bannerMessage.type === 'warning' ? (
-                <AlertTriangle className="w-4 h-4 shrink-0" strokeWidth={1.75} />
-              ) : (
-                <Info className="w-4 h-4 shrink-0" strokeWidth={1.75} />
-              )}
-              <span>{bannerMessage.text}</span>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Floating notification banner */}
+      {bannerMessage && (
+        <div className="mt-2.5 py-2 px-4 rounded-lg text-xs font-medium text-center transition-all border border-[#E5E0D8] bg-[#F4F1EA] text-[#1C1917] shadow-subtle">
+          {bannerMessage.text}
+        </div>
+      )}
     </header>
   );
 };

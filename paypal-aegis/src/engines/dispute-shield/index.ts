@@ -307,12 +307,12 @@ export async function simulateSnadDisputeFixture(
   hitlRequestId?: string;
   pdfBuffer?: Buffer;
 }> {
-  // Set store counters to reflect ~1.42% ratio (e.g. 142 sales, 2 disputes -> 1.41%)
-  const sales = 142;
+  // Set store counters so adding 1 dispute yields exactly 1.42% (3 / 211 = 1.4218% in Warning Zone)
+  const sales = 211;
   const existingDisputes = 2;
   store.setDisputeRatioCounters(sales, existingDisputes);
 
-  const disputeId = `PP-D-${Date.now().toString().slice(-6)}`;
+  const disputeId = 'PP-D-40193';
   const dueDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
 
   const mockDispute: PayPalDispute = {

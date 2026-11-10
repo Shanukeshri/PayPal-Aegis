@@ -111,6 +111,7 @@ router.post('/fixtures/seed-contract', async (req: Request, res: Response) => {
     };
 
     store.setProject(project);
+    store.clearPendingApprovals(); // Reset any staged demo approvals from previous runs
 
     // Seed Milestones
     for (const m of DEFAULT_DEMO_MILESTONES) {
@@ -123,6 +124,7 @@ router.post('/fixtures/seed-contract', async (req: Request, res: Response) => {
     const updatedMilestones = store.getMilestonesByProject(projectId);
     project.milestones = updatedMilestones;
     store.setProject(project);
+    store.clearPendingApprovals(); // Reset any staged demo approvals from previous runs
 
     logger.info('Judge Demo: Button 1 (Seed Contract & Lock Sandbox Hold) executed', {
       projectId,
@@ -326,6 +328,73 @@ router.post('/reset', (req: Request, res: Response) => {
   store.reset();
   logger.info('Judge Demo: State reset');
   res.json({ success: true, message: 'All demo state, ledger records, and disputes reset.' });
+});
+
+/**
+ * GET /api/demo/audit-logs
+ * Serves the 7 mandatory E2E audit log payloads for judge verification.
+ * Supports download as attachment via ?download=true
+ */
+router.get('/audit-logs', async (req: Request, res: Response) => {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+
+    const logFiles = [
+      'e2e-safegate-init.log',
+      'e2e-escrow-authorize.log',
+      'e2e-reauthorize-rotation.log',
+      'e2e-idempotency-replay.log',
+      'e2e-hitl-capture.log',
+      'e2e-webhook-hydration.log',
+      'e2e-dispute-defense.log',
+    ];
+
+    const searchDirs = [
+      path.resolve(__dirname, '../../logs'),
+      path.resolve(__dirname, '../../../logs'),
+      path.resolve(process.cwd(), 'logs'),
+      path.resolve(process.cwd(), '../logs'),
+    ];
+
+    const results: Record<string, any> = {};
+
+    for (const filename of logFiles) {
+      let content: string | null = null;
+      for (const dir of searchDirs) {
+        const fullPath = path.join(dir, filename);
+        if (fs.existsSync(fullPath)) {
+          content = fs.readFileSync(fullPath, 'utf8');
+          break;
+        }
+      }
+
+      if (content) {
+        try {
+          results[filename] = JSON.parse(content);
+        } catch {
+          results[filename] = content;
+        }
+      } else {
+        results[filename] = { status: 'PENDING_RUN', filename };
+      }
+    }
+
+    if (req.query.download === 'true' || req.query.download === '1') {
+      res.setHeader('Content-Disposition', 'attachment; filename="paypal-aegis-e2e-audit-logs.json"');
+      res.setHeader('Content-Type', 'application/json');
+    }
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      logs: results,
+      allPassed: Object.values(results).every((r: any) => r.status === 'PASS'),
+    });
+  } catch (err: any) {
+    logger.error('Failed to load audit logs', { err: err.message });
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 export default router;

@@ -9,7 +9,11 @@
     "dev:frontend": "cd paypal-aegis && npm run dev:frontend",
     "build": "cd paypal-aegis && npm run build",
     "start": "cd paypal-aegis && npm run start",
-    "typecheck": "cd paypal-aegis && npm run typecheck"
+    "typecheck": "cd paypal-aegis && npm run typecheck",
+    "test:e2e": "cd paypal-aegis && npm run test:e2e",
+    "test:browser": "cd paypal-aegis && npm run test:browser",
+    "generate:pdf": "cd paypal-aegis && npm run generate:pdf",
+    "generate:changed-pdf": "cd paypal-aegis && npm run generate:changed-pdf"
   },
   "keywords": ["paypal", "aegis", "escrow", "dispute", "ai", "agent", "mcp"],
   "author": "",

@@ -109,6 +109,14 @@ class InMemoryStore {
       .sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());
   }
 
+  clearPendingApprovals(): void {
+    for (const [id, req] of this.approvalRequests.entries()) {
+      if (req.status === 'PENDING_APPROVAL') {
+        this.approvalRequests.delete(id);
+      }
+    }
+  }
+
   getAllApprovals(): HITLApprovalRequest[] {
     return Array.from(this.approvalRequests.values())
       .sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());

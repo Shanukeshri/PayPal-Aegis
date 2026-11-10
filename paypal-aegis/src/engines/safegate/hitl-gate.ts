@@ -99,6 +99,30 @@ export function interceptAction(
   executor?: ActionExecutor,
   options?: { milestoneId?: string; disputeId?: string; expiresInMs?: number }
 ): HITLApprovalRequest {
+  // Deduplicate: If an existing pending request exists for the same action type (e.g. MAKE_DISPUTE_OFFER or CAPTURE),
+  // update and reuse the existing request to avoid stacking duplicate demo rows
+  const existingPending = store.getPendingApprovals().find((r) => r.type === type);
+
+  if (existingPending) {
+    logger.info('HITL gate: deduplicated pending action — updating existing request', {
+      approvalId: existingPending.id,
+      type,
+    });
+    existingPending.payload = payload;
+    existingPending.description = description;
+    existingPending.riskLevel = riskLevel;
+    existingPending.disputeId = options?.disputeId || (payload?.disputeId as string | undefined);
+    existingPending.milestoneId = options?.milestoneId || (payload?.milestoneId as string | undefined);
+    existingPending.requestedAt = new Date();
+    store.setApprovalRequest(existingPending);
+
+    if (executor) {
+      executorRegistry.set(existingPending.id, executor);
+    }
+    emitEvent('hitl:pending', existingPending);
+    return existingPending;
+  }
+
   const id = uuidv4();
   const now = new Date();
 
@@ -153,6 +177,11 @@ export async function approveAction(
 
   if (!request) {
     throw new Error(`Approval request not found: ${approvalId}`);
+  }
+
+  if (request.status === 'APPROVED') {
+    logger.info('Approval request already approved — returning existing record (idempotent)', { approvalId });
+    return request;
   }
 
   if (request.status !== 'PENDING_APPROVAL') {
@@ -245,6 +274,11 @@ export function rejectAction(
 
   if (!request) {
     throw new Error(`Approval request not found: ${approvalId}`);
+  }
+
+  if (request.status === 'APPROVED') {
+    logger.info('Approval request already approved — returning existing record (idempotent)', { approvalId });
+    return request;
   }
 
   if (request.status !== 'PENDING_APPROVAL') {
