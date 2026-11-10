@@ -1,0 +1,208 @@
+{
+  "info": {
+    "_postman_id": "aegis-paypal-hackathon-2026-seq",
+    "name": "PayPal Aegis — Automated Test Sequences",
+    "description": "Production test sequences for PayPal Aegis Operating System.\nCovering two-step milestone authorization, Day-3 honor period reauthorization with mutated authorization_id, 36-char UUID idempotency, $0 pre-escalation dispute settlement, and multipart provide-evidence submission.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001/api",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "ORDER-SIM-INIT01",
+      "type": "string"
+    },
+    {
+      "key": "activeAuthorizationId",
+      "value": "AUTH-SIM-DAY1-HOLD",
+      "type": "string"
+    },
+    {
+      "key": "mutatedAuthorizationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "disputeId",
+      "value": "PP-D-882910",
+      "type": "string"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Sequence 1: Two-Step Order Creation & Day-3 Reauthorization",
+      "item": [
+        {
+          "name": "1.1 Create Order (intent: AUTHORIZE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PayPal-Request-Id", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": \"AUTHORIZE\",\n  \"amount\": {\n    \"currency_code\": \"USD\",\n    \"value\": \"1250.00\"\n  },\n  \"description\": \"Milestone 1: Cloud Architecture Escrow Hold\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/safegate/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["safegate", "orders"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Authorize Order (Lock 72h Hold)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PayPal-Request-Id", "value": "{{idempotencyKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/safegate/orders/{{orderId}}/authorize",
+              "host": ["{{baseUrl}}"],
+              "path": ["safegate", "orders", "{{orderId}}", "authorize"]
+            }
+          }
+        },
+        {
+          "name": "1.3 Day-3 Reauthorize (Mutates authorization_id)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PayPal-Request-Id", "value": "4b0a1f98-9923-4df1-8ac1-11234a5590ef" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/escrow/milestones/m1-cloud-arch/fast-forward",
+              "host": ["{{baseUrl}}"],
+              "path": ["escrow", "milestones", "m1-cloud-arch", "fast-forward"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sequence 2: Idempotency & Snapshot Replay Verification",
+      "item": [
+        {
+          "name": "2.1 Initial Capture with 36-char UUID",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PayPal-Request-Id", "value": "7c8812e1-4321-4fba-bb99-998877665544" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"finalCapture\": true,\n  \"amount\": {\n    \"currency_code\": \"USD\",\n    \"value\": \"1250.00\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/escrow/milestones/m1-cloud-arch/capture",
+              "host": ["{{baseUrl}}"],
+              "path": ["escrow", "milestones", "m1-cloud-arch", "capture"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Replay Capture (Verifies Idempotent Snapshot Cache)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PayPal-Request-Id", "value": "7c8812e1-4321-4fba-bb99-998877665544" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"finalCapture\": true,\n  \"amount\": {\n    \"currency_code\": \"USD\",\n    \"value\": \"1250.00\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/escrow/milestones/m1-cloud-arch/capture",
+              "host": ["{{baseUrl}}"],
+              "path": ["escrow", "milestones", "m1-cloud-arch", "capture"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sequence 3: Pre-Escalation Inquiry Settlement ($0 Dispute Fee)",
+      "item": [
+        {
+          "name": "3.1 Check Rolling 90-Day Dispute Ratio Radar",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/disputes/ratio",
+              "host": ["{{baseUrl}}"],
+              "path": ["disputes", "ratio"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Make Settlement Offer (Resolves Inquiry at $0 Fee)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"offerAmount\": {\n    \"currency_code\": \"USD\",\n    \"value\": \"350.00\"\n  },\n  \"note\": \"Full amicable settlement offer prior to claim escalation.\",\n  \"offerType\": \"REFUND\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/disputes/{{disputeId}}/make-offer",
+              "host": ["{{baseUrl}}"],
+              "path": ["disputes", "{{disputeId}}", "make-offer"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sequence 4: Multipart PDF Evidence Representment (SNAD Claim)",
+      "item": [
+        {
+          "name": "4.1 Download Compiled A4 Evidence PDF",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/disputes/{{disputeId}}/evidence-pdf",
+              "host": ["{{baseUrl}}"],
+              "path": ["disputes", "{{disputeId}}", "evidence-pdf"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Submit Multipart provide-evidence Package",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"metadata\": {\n    \"evidence_type\": \"PROOF_OF_FULFILLMENT\",\n    \"evidence_info\": {},\n    \"notes\": \"Electronic proof of digital fulfillment, buyer IP telemetry, and deliverable SHA-256 hash.\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/disputes/{{disputeId}}/provide-evidence",
+              "host": ["{{baseUrl}}"],
+              "path": ["disputes", "{{disputeId}}", "provide-evidence"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

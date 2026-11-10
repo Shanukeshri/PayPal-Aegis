@@ -1,0 +1,18 @@
+{
+  "name": "paypal-aegis-workspace",
+  "version": "1.0.0",
+  "description": "PayPal Aegis — Autonomous Milestone Escrow, Delivery Verification & Dispute Compliance Operating System",
+  "main": "paypal-aegis/dist/server.js",
+  "scripts": {
+    "dev": "cd paypal-aegis && npm run dev",
+    "dev:backend": "cd paypal-aegis && npm run dev:backend",
+    "dev:frontend": "cd paypal-aegis && npm run dev:frontend",
+    "build": "cd paypal-aegis && npm run build",
+    "start": "cd paypal-aegis && npm run start",
+    "typecheck": "cd paypal-aegis && npm run typecheck"
+  },
+  "keywords": ["paypal", "aegis", "escrow", "dispute", "ai", "agent", "mcp"],
+  "author": "",
+  "license": "MIT"
+}
+

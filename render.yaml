@@ -1,0 +1,74 @@
+services:
+  # 1. PayPal Aegis Full-Stack Web Service
+  - type: web
+    name: paypal-aegis-app
+    env: node
+    plan: starter
+    region: oregon
+    buildCommand: cd paypal-aegis && npm install && npm run build
+    startCommand: cd paypal-aegis && npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_SANDBOX_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: aegis-redis
+          property: connectionString
+      - key: CHANNEL3_API_KEY
+        sync: false
+      - key: ELASTICSEARCH_URL
+        sync: false
+      - key: ELASTICSEARCH_API_KEY
+        sync: false
+      - key: DEMO_HMAC_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: HITL_APPROVAL_SECRET
+        generateValue: true
+
+  # 2. Render Workflows Worker (Durable Timers & Async Evidence Compilation)
+  - type: worker
+    name: paypal-aegis-worker
+    env: node
+    plan: starter
+    region: oregon
+    buildCommand: cd paypal-aegis && npm install && npm run build:backend
+    startCommand: cd paypal-aegis && node dist/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WORKER_MODE
+        value: true
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: aegis-redis
+          property: connectionString
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_SANDBOX_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+
+  # 3. Redis Instance (Webhook 7-Day Deduplication & Idempotency Cache)
+  - type: redis
+    name: aegis-redis
+    region: oregon
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+

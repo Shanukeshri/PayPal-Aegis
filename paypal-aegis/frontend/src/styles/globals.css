@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-quartz.css';
+
+:root {
+  --foreground-rgb: 15, 23, 42;
+  --background-rgb: 248, 250, 252;
+}
+
+html,
+body {
+  color: #0F172A;
+  background-color: #F8FAFC;
+  font-family: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom AG Grid Light Enterprise Overrides */
+.ag-theme-quartz {
+  --ag-background-color: #FFFFFF;
+  --ag-header-background-color: #F8FAFC;
+  --ag-odd-row-background-color: #FFFFFF;
+  --ag-even-row-background-color: #FFFFFF;
+  --ag-border-color: #E2E8F0;
+  --ag-row-border-color: #E2E8F0;
+  --ag-header-column-separator-display: none;
+  --ag-row-hover-color: #F8FAFC;
+  --ag-selected-row-background-color: #EFF6FF;
+  --ag-foreground-color: #0F172A;
+  --ag-secondary-foreground-color: #6B7280;
+  --ag-header-foreground-color: #6B7280;
+  --ag-font-family: inherit;
+  --ag-font-size: 14px;
+  --ag-grid-size: 8px;
+  --ag-cell-horizontal-padding: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #E2E8F0;
+}
+
+.ag-theme-quartz .ag-header-cell-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #6B7280;
+}
+
+.ag-theme-quartz .ag-paging-panel {
+  border-top: 1px solid #E2E8F0;
+  background-color: #F8FAFC;
+  color: #6B7280;
+  font-size: 12px;
+  height: 48px;
+  padding: 0 16px;
+}
+
+/* Subtle scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
