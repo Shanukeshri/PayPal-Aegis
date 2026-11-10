@@ -17,7 +17,8 @@
     "test:e2e": "tsx scripts/run-e2e-tests.ts",
     "test:browser": "tsx scripts/run-browser-tests.ts",
     "generate:pdf": "tsx scripts/generate-screenshots-pdf.ts",
-    "generate:changed-pdf": "tsx scripts/generate-changed-pdf.ts"
+    "generate:changed-pdf": "tsx scripts/generate-changed-pdf.ts",
+    "generate:report-pdf": "tsx scripts/generate-final-report-pdf.ts"
   },
   "keywords": [
     "paypal",

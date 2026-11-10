@@ -13,7 +13,8 @@
     "test:e2e": "cd paypal-aegis && npm run test:e2e",
     "test:browser": "cd paypal-aegis && npm run test:browser",
     "generate:pdf": "cd paypal-aegis && npm run generate:pdf",
-    "generate:changed-pdf": "cd paypal-aegis && npm run generate:changed-pdf"
+    "generate:changed-pdf": "cd paypal-aegis && npm run generate:changed-pdf",
+    "generate:report-pdf": "cd paypal-aegis && npm run generate:report-pdf"
   },
   "keywords": ["paypal", "aegis", "escrow", "dispute", "ai", "agent", "mcp"],
   "author": "",
