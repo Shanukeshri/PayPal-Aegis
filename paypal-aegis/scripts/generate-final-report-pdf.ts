@@ -682,3 +682,4 @@ main().catch(err => {
   console.error('Failed to generate report.pdf:', err);
   process.exit(1);
 });
+

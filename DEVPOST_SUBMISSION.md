@@ -2,7 +2,23 @@
 
 > **Project Name:** PayPal Aegis  
 > **Tagline:** Autonomous Milestone Escrow, Delivery Verification & Dispute Compliance Operating System  
-> **Repository:** Public GitHub repository with root MIT License  
+> **Live Web Application (Try It Out):** [https://paypal-aegis.onrender.com](https://paypal-aegis.onrender.com)  
+> **Repository:** [https://github.com/Shanukeshri/PayPal-Aegis](https://github.com/Shanukeshri/PayPal-Aegis) (Open Source MIT License)  
+> **Health Check:** [https://paypal-aegis.onrender.com/health](https://paypal-aegis.onrender.com/health)  
+> **Audit Dossier:** [report.pdf](https://github.com/Shanukeshri/PayPal-Aegis/blob/main/report.pdf)
+
+---
+
+## 📋 Devpost Submission Form Fields (Quick Copy-Paste)
+
+| Devpost Form Field | What to Enter |
+| :--- | :--- |
+| **Project Title** | `PayPal Aegis` |
+| **Tagline** | `Autonomous Milestone Escrow, Delivery Verification & Dispute Compliance Operating System` |
+| **Try it out (Live Link)** | `https://paypal-aegis.onrender.com` |
+| **GitHub Repository** | `https://github.com/Shanukeshri/PayPal-Aegis` |
+| **Video Demo URL** | *(Your YouTube link from DEMO_VIDEO_SCRIPT.md)* |
+| **Additional Links** | Health Check: `https://paypal-aegis.onrender.com/health`<br>Audit Dossier: `https://github.com/Shanukeshri/PayPal-Aegis/blob/main/report.pdf`<br>Postman Collection: `https://github.com/Shanukeshri/PayPal-Aegis/blob/main/postman/PayPal_Aegis_Audit.json` |
 
 ---
 
@@ -54,10 +70,13 @@ We built **PayPal Aegis** to resolve this entire vertical lifecycle: **Lock Fund
 
 ## 🚀 Try It Live
 
-1. Visit the live hosted dashboard or clone the repo and run `npm run dev`.
-2. Use the persistent **Judge Demo Fixtures** toolbar at the top of the screen:
-   * **Button 1:** Seed Contract & Lock Sandbox Hold
-   * **Button 2:** Fast-Forward Day-3 (Rotate ID)
-   * **Button 3:** Verify Deliverable (Channel3 + Elastic)
-   * **Button 4:** Simulate SNAD Dispute (1.42% Ratio)
-3. Inspect and approve actions in the SafeGate HITL drawer!
+1. Open the live deployment directly in any browser (Zero-Auth / No sign-in required):  
+   👉 **[https://paypal-aegis.onrender.com](https://paypal-aegis.onrender.com)**
+2. Check the real-time health telemetry endpoint:  
+   👉 **[https://paypal-aegis.onrender.com/health](https://paypal-aegis.onrender.com/health)**
+3. Use the persistent **Judge Demo Fixtures** toolbar at the top of the command center:
+   * **Button 1 (Seed Contract & Hold):** Ingests SOW into Bryntum Gantt and creates PayPal Orders v2 escrow hold (`intent: "AUTHORIZE"`).
+   * **Button 2 (Fast-Forward Day-3):** Fast-forwards 72h timer, mutates `authorization_id`, and rotates active pointer in AG Studio 3.
+   * **Button 3 (Verify Deliverable):** Queries Channel3 catalog specs and Elastic kNN image authenticity, intercepting `capture` in SafeGate HITL.
+   * **Button 4 (Simulate SNAD Dispute):** Calibrates 90-day volume to 1.42% Warning Zone and triggers pre-escalation `$0` fee make-offer settlement or compliant `<10MB` A4 PDF evidence upload.
+4. Review or download the live audit dossier directly from the top navigation bar by clicking **"Download Live E2E Audit Logs (.json)"** or download [`report.pdf`](https://github.com/Shanukeshri/PayPal-Aegis/blob/main/report.pdf).

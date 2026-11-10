@@ -8,8 +8,9 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3001/api",
-      "type": "string"
+      "value": "https://paypal-aegis.onrender.com/api",
+      "type": "string",
+      "description": "Live Render endpoint (or http://localhost:3001/api for local development)"
     },
     {
       "key": "orderId",

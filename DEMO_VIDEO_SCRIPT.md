@@ -6,7 +6,7 @@
 ---
 
 ### Segment 1: The Data Hook & Merchant Pain (0:00 – 0:25)
-* **Visual:** Open directly in the live **PayPal Aegis** dashboard (`http://localhost:3000`). Show the top **1-Click Judge Demo Toolbar**, the **AG Studio 3** ledger, and the **Bryntum Gantt** timeline with realistic data.
+* **Visual:** Open directly in the live **PayPal Aegis** dashboard (`https://paypal-aegis.onrender.com` or `http://localhost:3000`). Show the top **1-Click Judge Demo Toolbar**, the **AG Studio 3** ledger, and the **Bryntum Gantt** timeline with realistic data.
 * **Audio / Voiceover:**  
   *"For digital agencies, B2B contractors, and freelancers, PayPal is indispensable—yet deeply treacherous. Intangible deliverables receive zero protection under US Seller Protection for 'Significantly Not As Described' claims. Worse, if your rolling dispute ratio hits 1.5%, PayPal hits you with a non-refundable $30 fee per claim, even when you win.*  
   *At the same time, PayPal's new AI Agent Toolkit can surrender disputes, but gives agents zero tools to defend them. And two-step authorization holds lose reliability after Day 3, mutating the authorization ID upon renewal.*  

@@ -286,7 +286,7 @@ Any judge reviewing this submission can independently reproduce the entire test 
    npm run generate:pdf
    ```
 4. **Download Live Audit Package Directly from Browser:**
-   - Open `http://localhost:3000` (or the deployed Render URL).
+   - Open [https://paypal-aegis.onrender.com](https://paypal-aegis.onrender.com) (or `http://localhost:3000`).
    - Click the button **"Download Live E2E Audit Logs (.json)"** in the top navigation bar.
-   - Or perform a direct GET request: `curl http://localhost:3001/api/demo/audit-logs?download=true > paypal-aegis-e2e-audit-logs.json`.
+   - Or perform a direct GET request: `curl https://paypal-aegis.onrender.com/api/demo/audit-logs?download=true > paypal-aegis-e2e-audit-logs.json`.
 

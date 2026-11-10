@@ -11,6 +11,14 @@
 [![Bryntum](https://img.shields.io/badge/Bryntum-Gantt%20%26%20Calendar-2A74D9.svg)](https://bryntum.com)
 [![Channel3](https://img.shields.io/badge/Channel3-100M%2B%20Catalog%20Specs-6366F1.svg)](https://channel3.dev)
 [![Render](https://img.shields.io/badge/Render-Workflows%20%26%20Web%20Service-46E3B7.svg)](https://render.com)
+[![Live Demo](https://img.shields.io/badge/Render-Live%20Demo%20Active-brightgreen.svg)](https://paypal-aegis.onrender.com)
+
+---
+
+### 🌐 Live Production Deployment
+* **Live Command Center (Zero-Auth / Instant Try Out):** [https://paypal-aegis.onrender.com](https://paypal-aegis.onrender.com)
+* **Real-Time Health Status Endpoint:** [https://paypal-aegis.onrender.com/health](https://paypal-aegis.onrender.com/health)
+* **Audit & Visual Telemetry Dossier:** [report.pdf](report.pdf) (100% Passed: 14/14 Tests Verified)
 
 ---
 
@@ -156,12 +164,11 @@ Judges can test the entire end-to-end flow using the **persistent top toolbar**:
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/your-username/paypal-aegis.git
-cd paypal-aegis
+git clone https://github.com/Shanukeshri/PayPal-Aegis.git
+cd PayPal-Aegis/paypal-aegis
 
 # 2. Install backend & frontend dependencies
 npm install
-cd frontend && npm install && cd ..
 
 # 3. Configure environment (Optional — runs in simulation mode if blank)
 cp .env.example .env
@@ -169,13 +176,14 @@ cp .env.example .env
 # 4. Build both backend and frontend
 npm run build
 
-# 5. Start the complete application
+# 5. Start the complete application locally
 npm run dev
 ```
 
-* **Frontend Command Center:** [http://localhost:3000](http://localhost:3000)
-* **Backend SafeGate API:** [http://localhost:3001/api](http://localhost:3001/api)
-* **Health Check:** [http://localhost:3001/health](http://localhost:3001/health)
+* **Live Cloud Application:** [https://paypal-aegis.onrender.com](https://paypal-aegis.onrender.com)
+* **Local Frontend Command Center:** [http://localhost:3000](http://localhost:3000)
+* **Local Backend SafeGate API:** [http://localhost:3001/api](http://localhost:3001/api)
+* **Live Health Check:** [https://paypal-aegis.onrender.com/health](https://paypal-aegis.onrender.com/health)
 
 ---
 
