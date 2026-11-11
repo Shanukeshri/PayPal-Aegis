@@ -10,6 +10,7 @@ import {
   BoltIcon,
 } from '@heroicons/react/24/outline';
 import StateMutationDiffBanner from '../diff/StateMutationDiffBanner';
+import { copyTextToClipboard } from '../../lib/workflow';
 import type {
   AgentKey,
   StepId,
@@ -134,7 +135,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({
         channel3Sku: 'CH3-TECH-88921',
       },
       synthesisTask:
-        'Multimodal catalog match confirmed (CH3-TECH-88921) + 85.9% Elastic kNN authenticity.',
+        'Multimodal catalog match confirmed (CH3-TECH-88921) via 64-dim vector cosine similarity.',
     },
     4: {
       method: 'POST',
@@ -173,7 +174,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({
   };
 
   const handleCopyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(activeData.rawResponse, null, 2));
+    void copyTextToClipboard(JSON.stringify(activeData.rawResponse, null, 2));
     setCopiedJson(true);
     setTimeout(() => setCopiedJson(false), 2000);
   };
@@ -431,13 +432,17 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({
                 <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 font-mono text-[11px] space-y-1.5">
                   <div className="flex items-center justify-between font-bold text-emerald-900">
                     <span>Elasticsearch 64-Dim Cosine Math</span>
-                    <span>{(activeData.liveRag.cosineMath.similarity * 100).toFixed(2)}%</span>
+                    <span>{(activeData.liveRag.cosineMath.similarity * 100).toFixed(1)}%</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-[10px] text-emerald-900">
-                    <div>Dot Product: {activeData.liveRag.cosineMath.dotProduct}</div>
+                    <div>
+                      Dot Product: {activeData.liveRag.cosineMath.dotProduct.toFixed(4)}
+                    </div>
                     <div>||A||₂: {activeData.liveRag.cosineMath.normA}</div>
                     <div>||B||₂: {activeData.liveRag.cosineMath.normB}</div>
-                    <div>Similarity: {activeData.liveRag.cosineMath.similarity}</div>
+                    <div>
+                      Similarity: {activeData.liveRag.cosineMath.similarity.toFixed(3)}
+                    </div>
                   </div>
                 </div>
               )}

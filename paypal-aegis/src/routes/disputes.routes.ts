@@ -1,7 +1,10 @@
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import { disputeShield } from '../engines/dispute-shield';
 import { safeGate } from '../engines/safegate';
 import { compileRagEvidenceForDispute } from '../services/disputes';
+import { runDisputeStrategistAgent } from '../services/agents';
+import { verificationService } from '../services/verification';
 import logger from '../lib/logger';
 import { store } from '../lib/store';
 import {
@@ -314,7 +317,22 @@ router.post('/:id/provide-evidence', async (req: Request, res: Response) => {
     const { metadata } = req.body || {};
     const prevStatus = store.getDispute(disputeId)?.status || 'WAITING_FOR_SELLER_RESPONSE';
 
+    // Refresh RAG audit context & agent telemetry for representment evidence compilation
+    const activeDispute = store.getDispute(disputeId);
+    if (activeDispute) {
+      await verificationService.searchAuditTrailByTransaction(disputeId).catch(() => null);
+      await runDisputeStrategistAgent({
+        disputeId,
+        disputeReason: activeDispute.reason,
+        stage: activeDispute.dispute_life_cycle_stage,
+        currentRatio: disputeShield.calculateDisputeRatio().ratio,
+        thresholdProximity: disputeShield.calculateDisputeRatio().thresholdProximity,
+        amount: activeDispute.dispute_amount,
+      }).catch(() => null);
+    }
+
     const result = await disputeShield.executeProvideEvidence(disputeId, metadata);
+    const paypalRequestId = result.paypalRequestId || crypto.randomUUID();
 
     // Clear pending PROVIDE_DISPUTE_EVIDENCE HITL request if any
     const pendingEv = store
@@ -333,7 +351,11 @@ router.post('/:id/provide-evidence', async (req: Request, res: Response) => {
       message: `Multipart/related A4 legal PDF representment uploaded to PayPal Disputes API with buyer IP telemetry & SHA-256 hash.`,
       payload: {
         disputeId,
-        uploadResult: result,
+        paypalRequestId,
+        uploadResult: {
+          ...result,
+          paypalRequestId,
+        },
       },
     });
 
@@ -355,7 +377,7 @@ router.post('/:id/provide-evidence', async (req: Request, res: Response) => {
         'PayPal representment SLA satisfied ahead of 10-day deadline with immutable Elastic audit evidence.',
     });
 
-    res.json({ success: true, data: { ...result, diff } });
+    res.json({ success: true, paypalRequestId, data: { ...result, paypalRequestId, diff } });
   } catch (err: any) {
     logger.error('Failed to submit dispute evidence', { err: err.message });
     res.status(500).json({ success: false, error: err.message });
@@ -365,6 +387,7 @@ router.post('/:id/provide-evidence', async (req: Request, res: Response) => {
 // POST /api/disputes/simulate-escalated-chargeback — Test Branch B (CHARGEBACK -> provide-evidence)
 router.post('/simulate-escalated-chargeback', async (req: Request, res: Response) => {
   try {
+    const paypalRequestId = crypto.randomUUID();
     const amount = String(req.body?.disputeAmount || '350.00');
     const result = await disputeShield.simulateSnadDisputeFixture(
       0.0155,
@@ -373,6 +396,16 @@ router.post('/simulate-escalated-chargeback', async (req: Request, res: Response
       amount,
       'CHARGEBACK'
     );
+
+    await runDisputeStrategistAgent({
+      disputeId: result.dispute.dispute_id,
+      disputeReason: result.dispute.reason,
+      stage: result.dispute.dispute_life_cycle_stage,
+      currentRatio: result.triage.currentRatio.ratio,
+      thresholdProximity: result.triage.currentRatio.thresholdProximity,
+      amount: result.dispute.dispute_amount,
+    }).catch(() => null);
+    await verificationService.searchAuditTrailByTransaction(result.dispute.dispute_id).catch(() => null);
 
     publishEcosystemEvent({
       sender: 'CLIENT',
@@ -414,7 +447,7 @@ router.post('/simulate-escalated-chargeback', async (req: Request, res: Response
         'Pre-escalation make-offer disabled cleanly per PayPal v1/customer/disputes lifecycle. Submit A4 multipart PDF evidence via provide-evidence.',
     });
 
-    res.json({ success: true, data: { ...result, diff } });
+    res.json({ success: true, paypalRequestId, data: { ...result, paypalRequestId, diff } });
   } catch (err: any) {
     logger.error('Failed to simulate escalated chargeback', { err: err.message });
     res.status(500).json({ success: false, error: err.message });

@@ -32,6 +32,12 @@ export interface StoredAuditDocument {
   imageKnnSimilarityScore: number;
   isAuthentic: boolean;
   featureVector?: number[];
+  cosineMath?: {
+    dotProduct: number;
+    normA: number;
+    normB: number;
+    similarity: number;
+  };
   indexedAt: string;
 }
 

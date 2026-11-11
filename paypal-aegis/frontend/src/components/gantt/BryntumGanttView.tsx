@@ -9,6 +9,7 @@ import {
   ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline';
 import type { Milestone, PayPalDispute } from '../../types';
+import { copyTextToClipboard } from '../../lib/workflow';
 
 interface BryntumGanttViewProps {
   milestones: Milestone[];
@@ -126,7 +127,7 @@ export const BryntumGanttView: React.FC<BryntumGanttViewProps> = ({
 
   const copyProjectModelJson = () => {
     const text = JSON.stringify(bryntumProjectModel, null, 2);
-    navigator.clipboard.writeText(text);
+    void copyTextToClipboard(text);
     setCopiedJson(true);
     setTimeout(() => setCopiedJson(false), 2000);
   };

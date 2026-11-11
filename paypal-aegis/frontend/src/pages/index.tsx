@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { io, Socket } from 'socket.io-client';
 import { ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import api from '../services/api';
+import { generateUuidV4 } from '../lib/workflow';
 import { Sidebar } from '../components/layout/Sidebar';
 import { TopBar } from '../components/layout/TopBar';
 import { MutationToast } from '../components/notifications/MutationToast';
@@ -133,7 +134,9 @@ export default function PayPalAegisApp() {
         statusCode: 200,
         requestId:
           (rawResponse?.paypalRequestId as string) ||
-          `aegis-${Date.now().toString(36)}`,
+          (rawResponse?.data?.paypalRequestId as string) ||
+          (rawResponse?.requestId as string) ||
+          generateUuidV4(),
         crc32Checksum: computeCrc32Hex(serialized),
         rawResponse,
       };

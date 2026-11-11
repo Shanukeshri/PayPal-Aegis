@@ -605,6 +605,7 @@ router.post('/fixtures/verify-deliverable', async (req: Request, res: Response) 
         imageKnnSimilarityScore: elasticAuth.knnScore,
         isAuthentic: elasticAuth.isAuthentic,
         featureVector: elasticAuth.featureVector,
+        cosineMath: elasticAuth.cosineSimilarityMath,
       }),
       runDeliveryAuditorAgent({
         milestoneId: milestone.id,

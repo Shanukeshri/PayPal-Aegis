@@ -19,7 +19,7 @@ import type {
   CustomSowMilestone,
   CustomSandboxExecutionPayload,
 } from '../../types';
-import { computeFileSha256Hex } from '../../lib/workflow';
+import { computeFileSha256Hex, copyTextToClipboard } from '../../lib/workflow';
 
 interface DemoControlsDrawerProps {
   isOpen: boolean;
@@ -330,7 +330,7 @@ export const DemoControlsDrawer: React.FC<DemoControlsDrawerProps> = ({
   };
 
   const handleCopyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(livePayloadPreview, null, 2));
+    void copyTextToClipboard(JSON.stringify(livePayloadPreview, null, 2));
     setCopiedJson(true);
     setTimeout(() => setCopiedJson(false), 2000);
   };

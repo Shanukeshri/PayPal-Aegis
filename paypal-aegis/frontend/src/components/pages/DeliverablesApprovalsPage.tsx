@@ -17,6 +17,7 @@ import {
   getActiveMilestone,
   getVerifiedDeliverable,
   computeFileSha256Hex,
+  copyTextToClipboard,
 } from '../../lib/workflow';
 
 const DEFAULT_DELIVERABLE_TITLE = 'Industrial Edge Router SKU-9921';
@@ -175,7 +176,7 @@ export const DeliverablesApprovalsPage: React.FC<DeliverablesApprovalsPageProps>
   const skuMatch = verificationDetails?.channel3SkuMatch || customSku || DEFAULT_DELIVERABLE_SKU;
 
   const handleCopyHash = () => {
-    navigator.clipboard.writeText(sha256);
+    void copyTextToClipboard(sha256);
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
   };

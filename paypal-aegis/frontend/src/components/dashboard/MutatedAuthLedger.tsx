@@ -13,6 +13,7 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline';
 import type { Milestone } from '../../types';
+import { copyTextToClipboard } from '../../lib/workflow';
 
 interface MutatedAuthLedgerProps {
   milestones: Milestone[];
@@ -30,7 +31,7 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
   const gridApiRef = useRef<GridApi | null>(null);
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    void copyTextToClipboard(text);
     setCopiedKey(text);
     setTimeout(() => setCopiedKey(null), 2000);
   };

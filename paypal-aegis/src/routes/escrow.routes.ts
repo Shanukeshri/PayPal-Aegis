@@ -411,6 +411,7 @@ router.post('/milestones/:id/deliverable', async (req: Request, res: Response) =
       imageKnnSimilarityScore: elasticAuth.knnScore,
       isAuthentic: elasticAuth.isAuthentic,
       featureVector: elasticAuth.featureVector,
+      cosineMath: elasticAuth.cosineSimilarityMath,
     });
 
     // 4. Stage capture in HITL Gate!

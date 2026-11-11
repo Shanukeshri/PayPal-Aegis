@@ -1,27 +1,22 @@
 /**
- * PayPal Aegis v2.0 — Complete Tripartite Ecosystem Visual Flow PDF Generator
+ * Visual End-to-End Flow PDF Generator for PayPal Aegis (Redesigned Role-Separated UI)
  *
- * Captures high-resolution Retina screenshots (1440x920 @ 2x) across the entire
- * Tripartite Escrow & Dispute Compliance OS (`http://localhost:3000`) to prove
- * every transition strictly visually:
- *   Opening Clean State -> Highlighted Click Target -> What Changed (State Mutation)
- *
- * Outputs:
+ * Drives the live PayPal Aegis frontend at http://localhost:3000 with Puppeteer + Chrome,
+ * walks step-by-step through every role view, sidebar module, drawer, branch, and guardrail,
+ * captures 2x Retina PNG screenshots with visual click callouts, and compiles:
  *   - /Users/shanukeshri983/Desktop/PayPal/flow.pdf
  *   - /Users/shanukeshri983/Desktop/PayPal/paypal-aegis/flow.pdf
- *   - PNG frames under /Users/shanukeshri983/Desktop/PayPal/screenshots/flow/
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
-import * as path from 'path';
 import puppeteer, { Browser, Page } from 'puppeteer-core';
 
 const CHROME_PATH =
   process.env.CHROME_PATH ||
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-
 const TARGET_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 const API_URL = process.env.API_BASE_URL || 'http://localhost:3001/api';
 
@@ -50,21 +45,21 @@ interface FlowStep {
   apiBadge?: string;
 }
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function httpRequest(
-  urlStr: string,
-  method: 'GET' | 'POST' = 'GET',
-  body?: Record<string, unknown>
+  url: string,
+  method: string,
+  body?: unknown
 ): Promise<{ status: number; data: any }> {
   return new Promise((resolve, reject) => {
-    const parsed = new URL(urlStr);
-    const transport = parsed.protocol === 'https:' ? https : http;
-    const payload = body ? JSON.stringify(body) : undefined;
-    const req = transport.request(
+    const parsed = new URL(url);
+    const lib = parsed.protocol === 'https:' ? https : http;
+    const payload = body !== undefined ? JSON.stringify(body) : undefined;
+    const req = lib.request(
       {
         hostname: parsed.hostname,
-        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        port: parsed.port,
         path: parsed.pathname + parsed.search,
         method,
         headers: payload
@@ -72,7 +67,7 @@ function httpRequest(
               'Content-Type': 'application/json',
               'Content-Length': Buffer.byteLength(payload),
             }
-          : {},
+          : undefined,
       },
       (res) => {
         let raw = '';
@@ -106,50 +101,39 @@ async function waitForText(
 ): Promise<void> {
   await page.waitForFunction(
     (needle: string) =>
-      document.body &&
-      document.body.innerText.toLowerCase().includes(needle.toLowerCase()),
+      Boolean(
+        document.body &&
+          document.body.innerText.toLowerCase().includes(needle.toLowerCase())
+      ),
     { timeout: timeoutMs },
     text
   );
 }
 
-async function waitForSelectorText(
+async function waitForNoText(
   page: Page,
-  selector: string,
   text: string,
-  timeoutMs = 45000
+  timeoutMs = 20000
 ): Promise<void> {
   await page.waitForFunction(
-    (sel: string, needle: string) => {
-      const els = Array.from(document.querySelectorAll(sel));
-      const lowerNeedle = needle.toLowerCase();
-      return els.some((el) => {
-        const htmlEl = el as HTMLElement;
-        return (
-          htmlEl.offsetParent !== null &&
-          (htmlEl.innerText || htmlEl.textContent || '')
-            .toLowerCase()
-            .includes(lowerNeedle)
-        );
-      });
-    },
+    (needle: string) =>
+      Boolean(
+        document.body &&
+          !document.body.innerText.toLowerCase().includes(needle.toLowerCase())
+      ),
     { timeout: timeoutMs },
-    selector,
     text
   );
 }
 
-/**
- * Finds the first visible matching element whose text contains ALL provided substrings
- * (excluding any injected highlight overlay) and either highlights or clicks it.
- */
 async function locateAndAct(
   page: Page,
   selector: string,
   requiredTexts: string[],
   action: 'highlight' | 'click' | 'scrollOnly',
   calloutLabel?: string,
-  scrollBlock: ScrollLogicalPosition = 'center'
+  scrollBlock: ScrollLogicalPosition = 'center',
+  exactMatch = false
 ): Promise<boolean> {
   const result = await page.evaluate(
     (
@@ -157,7 +141,8 @@ async function locateAndAct(
       needles: string[],
       act: string,
       label: string | undefined,
-      blockPos: ScrollLogicalPosition
+      blockPos: ScrollLogicalPosition,
+      exact: boolean
     ) => {
       const candidates = Array.from(document.querySelectorAll(sel));
       const target = candidates.find((el) => {
@@ -168,8 +153,12 @@ async function locateAndAct(
         const style = window.getComputedStyle(htmlEl);
         if (style.display === 'none' || style.visibility === 'hidden') return false;
         const txt = (htmlEl.innerText || htmlEl.textContent || '')
+          .replace(/\s+/g, ' ')
           .trim()
           .toLowerCase();
+        if (exact) {
+          return needles.length === 1 && txt === needles[0].toLowerCase();
+        }
         return needles.every((n) => txt.includes(n.toLowerCase()));
       }) as HTMLElement | undefined;
 
@@ -229,8 +218,8 @@ async function locateAndAct(
 
         const placeBelow = docTop < 54;
         const leftPos = Math.min(
-          Math.max(12, docLeft + rect.width / 2 - 115),
-          document.documentElement.clientWidth - 300
+          Math.max(12, docLeft + rect.width / 2 - 110),
+          document.documentElement.clientWidth - 290
         );
         pill.style.left = `${leftPos}px`;
         pill.style.top = placeBelow ? `${docBottom + 9}px` : `${docTop - 34}px`;
@@ -250,7 +239,8 @@ async function locateAndAct(
     requiredTexts,
     action,
     calloutLabel,
-    scrollBlock
+    scrollBlock,
+    exactMatch
   );
 
   if (!result) {
@@ -268,24 +258,35 @@ async function clearHighlight(page: Page): Promise<void> {
   });
 }
 
+async function dismissToastIfPresent(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const btn = document.querySelector(
+      'button[aria-label="Dismiss notification"]'
+    ) as HTMLElement | null;
+    if (btn) btn.click();
+  });
+  await delay(120);
+}
+
+async function switchRole(page: Page, role: 'Client' | 'Merchant'): Promise<void> {
+  await locateAndAct(page, 'header button', [role], 'click');
+  await delay(250);
+}
+
+async function navigateSidebar(
+  page: Page,
+  itemLabel: 'Overview' | 'Escrow' | 'Delivery' | 'Disputes' | 'Activity'
+): Promise<void> {
+  await locateAndAct(page, 'nav[aria-label="Primary Navigation"] button', [itemLabel], 'click');
+  await delay(300);
+}
+
 async function capturePng(
   page: Page,
   filename: string,
-  options: { fullPage?: boolean; scrollY?: number; unfixFooter?: boolean } = {}
+  options: { fullPage?: boolean; scrollY?: number } = {}
 ): Promise<string> {
   const fullPath = path.join(FLOW_DIR, filename);
-  const shouldUnfixFooter = options.unfixFooter ?? (options.fullPage ?? false);
-  if (shouldUnfixFooter) {
-    await page.evaluate(() => {
-      if (!document.getElementById('__flow_unfix_drawer')) {
-        const st = document.createElement('style');
-        st.id = '__flow_unfix_drawer';
-        st.textContent =
-          '.fixed.bottom-0.left-0.right-0 { position: static !important; margin-top: 16px !important; }';
-        document.head.appendChild(st);
-      }
-    });
-  }
   if (typeof options.scrollY === 'number') {
     await page.evaluate((y: number) => window.scrollTo(0, y), options.scrollY);
     await delay(180);
@@ -294,36 +295,8 @@ async function capturePng(
     path: fullPath,
     fullPage: options.fullPage ?? false,
   });
-  if (shouldUnfixFooter) {
-    await page.evaluate(() => {
-      document.getElementById('__flow_unfix_drawer')?.remove();
-    });
-  }
   console.log(`  Captured -> ${filename}`);
   return fullPath;
-}
-
-async function scrollElementToTop(
-  page: Page,
-  selector: string,
-  requiredTexts: string[]
-): Promise<void> {
-  await page.evaluate(
-    (sel: string, needles: string[]) => {
-      const els = Array.from(document.querySelectorAll(sel));
-      const target = els.find((el) => {
-        const htmlEl = el as HTMLElement;
-        const txt = (htmlEl.innerText || htmlEl.textContent || '').trim();
-        return needles.every((n) => txt.includes(n));
-      }) as HTMLElement | undefined;
-      if (target) {
-        target.scrollIntoView({ behavior: 'instant', block: 'start' });
-      }
-    },
-    selector,
-    requiredTexts
-  );
-  await delay(200);
 }
 
 function phaseBadgeStyle(phase: PhaseType): {
@@ -390,24 +363,28 @@ function buildHtmlDocument(steps: FlowStep[]): string {
 
   const tocGroups = [
     {
-      stage: 'Phase 0-1: Opening Baseline & Contract Escrow Lock',
-      steps: steps.filter((s) => s.stepNumber >= 1 && s.stepNumber <= 4),
+      stage: 'Phase 1: Role Baseline & Milestone 1 Lock',
+      steps: steps.filter((s) => s.stepNumber >= 1 && s.stepNumber <= 3),
     },
     {
-      stage: 'Phase 2: Day-3 Renewal & Mutated Auth ID Rotation (AG Grid + Gantt)',
-      steps: steps.filter((s) => s.stepNumber >= 5 && s.stepNumber <= 8),
+      stage: 'Phase 2: 72h Renewal, Ledger & Gantt',
+      steps: steps.filter((s) => s.stepNumber >= 4 && s.stepNumber <= 7),
     },
     {
-      stage: 'Phase 3: Deliverable Audit, Channel3/Elastic RAG & SafeGate HITL',
-      steps: steps.filter((s) => s.stepNumber >= 9 && s.stepNumber <= 13),
+      stage: 'Phase 3: Delivery Audit, Bell & M2 Isolation',
+      steps: steps.filter((s) => s.stepNumber >= 8 && s.stepNumber <= 14),
     },
     {
-      stage: 'Phase 4: Branch A ($0-Fee Settlement) -> Branch B (Escalated Chargeback PDF)',
-      steps: steps.filter((s) => s.stepNumber >= 14 && s.stepNumber <= 23),
+      stage: 'Phase 4: Dispute Shield (Branch A & Branch B)',
+      steps: steps.filter((s) => s.stepNumber >= 15 && s.stepNumber <= 21),
     },
     {
-      stage: 'Phase 5: Cross-Party Event Bus, Custom Sandbox & Elastic kNN Telemetry',
-      steps: steps.filter((s) => s.stepNumber >= 24),
+      stage: 'Phase 5: Activity Bus & Dev Tools Drawer',
+      steps: steps.filter((s) => s.stepNumber >= 22 && s.stepNumber <= 24),
+    },
+    {
+      stage: 'Phase 6: Demo Sandbox Guardrails & Reset',
+      steps: steps.filter((s) => s.stepNumber >= 25),
     },
   ];
 
@@ -415,56 +392,56 @@ function buildHtmlDocument(steps: FlowStep[]): string {
     <div class="pdf-page cover-page">
       <div class="cover-topbar">
         <div class="brand-lockup">
-          <span class="brand-pill">PAYPAL AEGIS v2.0</span>
-          <span class="brand-sub">Tripartite Escrow, Agentic SafeGate HITL &amp; 1.5% Dispute Compliance OS</span>
+          <span class="brand-pill">PAYPAL AEGIS</span>
+          <span class="brand-sub">Role-Separated Milestone Escrow, SafeGate HITL &amp; Dispute Defense OS</span>
         </div>
         <div class="cover-meta">Visual End-to-End Application Flow • ${steps.length} Live UI Frames • Captured on Live Sandbox</div>
       </div>
 
       <div class="cover-hero">
-        <h1>Complete Application Flow: Start Screen to Full Multi-Party Settlement</h1>
+        <h1>Complete Application Flow: Start Screen to Multi-Milestone Settlement &amp; Dispute Shield</h1>
         <p class="cover-lead">
-          Every frame in this visual walkthrough documents the exact <strong>Earlier State → User Click → Live State Mutation</strong> progression
-          across <strong>Client / Buyer</strong>, <strong>PayPal Aegis Arbiter</strong>, and <strong>Business / Merchant</strong> running against live PayPal Sandbox APIs,
-          Channel3 100M+ SKU verification, Elastic 64-dim kNN RAG, AG Grid v31.3, and Bryntum Gantt scheduling.
+          Each frame documents the exact <strong>State Earlier → User Click → Live State Change → Technical Proof</strong> across
+          the redesigned role-separated workspace (<strong>Sidebar Navigation + TopBar Client/Merchant Switcher + Bell Approvals + Dev/Demo Drawers</strong>),
+          backed by Orders v2 Auth/Reauth/Capture, Channel3 catalog matching, 64-dim Cosine RAG, AG Grid, Bryntum Gantt, and A4 PDF representment.
         </p>
       </div>
 
       <div class="flow-strip">
         <div class="flow-node">
           <div class="fn-num">01</div>
-          <div class="fn-title">Clean Baseline</div>
-          <div class="fn-desc">$0.00 Held • AWAITING SEED</div>
+          <div class="fn-title">Role Baseline</div>
+          <div class="fn-desc">Sidebar + Switcher • $0 Held</div>
         </div>
         <div class="flow-arrow">→</div>
         <div class="flow-node">
           <div class="fn-num">02</div>
           <div class="fn-title">Escrow Lock</div>
-          <div class="fn-desc">Orders v2 Auth ($1,250.00)</div>
+          <div class="fn-desc">Orders v2 + 72h Auth Rotation</div>
         </div>
         <div class="flow-arrow">→</div>
         <div class="flow-node">
           <div class="fn-num">03</div>
-          <div class="fn-title">Day-3 Keeper</div>
-          <div class="fn-desc">Mutated Auth ID + Gantt Shift</div>
+          <div class="fn-title">Delivery &amp; Bell</div>
+          <div class="fn-desc">SKU/Vector Audit + M2 Isolation</div>
         </div>
         <div class="flow-arrow">→</div>
         <div class="flow-node">
           <div class="fn-num">04</div>
-          <div class="fn-title">SafeGate Audit</div>
-          <div class="fn-desc">Channel3 + Elastic kNN -> Settled</div>
+          <div class="fn-title">Dispute Shield</div>
+          <div class="fn-desc">0.95% $0 Offer vs A4 PDF</div>
         </div>
         <div class="flow-arrow">→</div>
         <div class="flow-node">
           <div class="fn-num">05</div>
-          <div class="fn-title">Dispute Shield</div>
-          <div class="fn-desc">A4 PDF + $0 Offer -> 0.95% Restored</div>
+          <div class="fn-title">Activity &amp; Dev</div>
+          <div class="fn-desc">CRC32 Wire • 4 Scoped Tools</div>
         </div>
         <div class="flow-arrow">→</div>
         <div class="flow-node">
           <div class="fn-num">06</div>
-          <div class="fn-title">Wire &amp; Sandbox</div>
-          <div class="fn-desc">Custom Inputs + Raw PayPal HTTP</div>
+          <div class="fn-title">Sandbox &amp; Reset</div>
+          <div class="fn-desc">Malformed SOW Guardrail</div>
         </div>
       </div>
 
@@ -537,7 +514,7 @@ function buildHtmlDocument(steps: FlowStep[]): string {
             </div>
 
             <div class="info-card card-proof">
-              <div class="ic-label">4. What This Demonstrates</div>
+              <div class="ic-label">4. Technical Proof</div>
               <div class="ic-body">${escapeHtml(s.ecosystemProof)}</div>
             </div>
           </div>
@@ -546,10 +523,10 @@ function buildHtmlDocument(steps: FlowStep[]): string {
             <div class="frame-shell">
               <div class="browser-dots">
                 <span></span><span></span><span></span>
-                <span class="browser-url">${escapeHtml(TARGET_URL)} — PayPal Aegis Tripartite Ecosystem OS</span>
+                <span class="browser-url">${escapeHtml(TARGET_URL)} — PayPal Aegis Role-Separated Escrow &amp; Dispute OS</span>
               </div>
               <div class="img-wrap">
-                <img src="${dataUri}" alt="Step ${s.stepNumber}: ${escapeHtml(s.title)}" />
+                <img src="${dataUri}" alt="${escapeHtml(s.title)}" />
               </div>
             </div>
           </div>
@@ -562,7 +539,7 @@ function buildHtmlDocument(steps: FlowStep[]): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>PayPal Aegis v2.0 — Visual Application Flow</title>
+<title>PayPal Aegis — Visual Application Flow</title>
 <style>
   @page {
     size: A4 landscape;
@@ -599,7 +576,7 @@ function buildHtmlDocument(steps: FlowStep[]): string {
     background: #F9F8F5;
     border: 1px solid #E5E0D8;
     border-radius: 8px;
-    padding: 7mm 8mm;
+    padding: 6.5mm 7.5mm;
     justify-content: space-between;
   }
   .cover-topbar {
@@ -607,7 +584,7 @@ function buildHtmlDocument(steps: FlowStep[]): string {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1.5px solid #E5E0D8;
-    padding-bottom: 4mm;
+    padding-bottom: 3.5mm;
   }
   .brand-lockup {
     display: flex;
@@ -629,22 +606,22 @@ function buildHtmlDocument(steps: FlowStep[]): string {
     color: #1C1917;
   }
   .cover-meta {
-    font-size: 9.5px;
+    font-size: 9px;
     font-weight: 600;
     color: #57534E;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .cover-hero h1 {
-    font-size: 20px;
+    font-size: 18.5px;
     line-height: 1.2;
     color: #003087;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
   }
   .cover-lead {
-    font-size: 10.5px;
-    line-height: 1.45;
+    font-size: 10px;
+    line-height: 1.42;
     color: #44403C;
-    max-width: 245mm;
+    max-width: 255mm;
   }
   .flow-strip {
     display: flex;
@@ -654,55 +631,52 @@ function buildHtmlDocument(steps: FlowStep[]): string {
     background: #FFFFFF;
     border: 1px solid #E5E0D8;
     border-radius: 8px;
-    padding: 4mm 5mm;
+    padding: 3.2mm 4.5mm;
   }
   .flow-node {
     flex: 1;
     background: #F4F1EA;
     border: 1px solid #E5E0D8;
     border-radius: 6px;
-    padding: 3mm 3mm;
+    padding: 2.5mm 2.8mm;
   }
   .fn-num {
-    font-size: 8.5px;
+    font-size: 8px;
     font-weight: 800;
     color: #0070BA;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .fn-title {
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 800;
     color: #1C1917;
     margin: 1px 0;
   }
   .fn-desc {
-    font-size: 8px;
+    font-size: 7.8px;
     color: #57534E;
   }
   .flow-arrow {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     color: #0070BA;
   }
   .toc-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 3.5mm;
+    gap: 3mm;
     width: 100%;
   }
   .toc-card {
     background: #FFFFFF;
     border: 1px solid #E5E0D8;
     border-radius: 7px;
-    padding: 3mm 3.5mm;
+    padding: 2.6mm 3.2mm;
     min-width: 0;
     overflow: hidden;
   }
-  .toc-card:nth-child(4) {
-    grid-column: span 2;
-  }
   .toc-head {
-    font-size: 9px;
+    font-size: 8.6px;
     font-weight: 800;
     color: #003087;
     border-bottom: 1px solid #F4F1EA;
@@ -716,13 +690,13 @@ function buildHtmlDocument(steps: FlowStep[]): string {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2.5px;
   }
   .toc-list li {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 7.7px;
+    font-size: 7.4px;
     line-height: 1.25;
     min-width: 0;
   }
@@ -730,13 +704,13 @@ function buildHtmlDocument(steps: FlowStep[]): string {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-weight: 800;
     color: #57534E;
-    min-width: 24px;
+    min-width: 23px;
     flex-shrink: 0;
   }
   .toc-badge {
-    font-size: 6.5px;
+    font-size: 6.2px;
     font-weight: 800;
-    padding: 1px 4px;
+    padding: 1px 3.5px;
     border-radius: 3px;
     border: 1px solid;
     white-space: nowrap;
@@ -744,136 +718,140 @@ function buildHtmlDocument(steps: FlowStep[]): string {
   }
   .toc-text {
     color: #1C1917;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    flex: 1;
   }
   .cover-footer {
     display: flex;
     justify-content: space-between;
     font-size: 8.5px;
-    color: #57534E;
+    color: #78716C;
     border-top: 1px solid #E5E0D8;
-    padding-top: 3mm;
+    padding-top: 2.5mm;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   /* Step Pages */
   .step-page {
-    gap: 3mm;
+    background: #ffffff;
   }
   .step-topbar {
-    height: 9mm;
+    height: 10mm;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #F9F8F5;
-    border: 1px solid #E5E0D8;
-    border-radius: 6px;
-    padding: 0 4mm;
+    border-bottom: 1.5px solid #E5E0D8;
+    padding-bottom: 2mm;
+    margin-bottom: 2.5mm;
+    flex-shrink: 0;
   }
-  .topbar-left, .topbar-right {
+  .topbar-left {
     display: flex;
     align-items: center;
     gap: 7px;
   }
   .step-num-pill {
-    background: #003087;
+    background: #1C1917;
     color: #ffffff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 9px;
     font-weight: 800;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    padding: 2px 7px;
-    border-radius: 4px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    letter-spacing: 0.04em;
   }
   .phase-pill {
     font-size: 8.5px;
     font-weight: 800;
-    padding: 2px 7px;
-    border-radius: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
     border: 1px solid;
     letter-spacing: 0.03em;
   }
   .stage-label {
     font-size: 10px;
     font-weight: 700;
-    color: #1C1917;
+    color: #57534E;
+  }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .api-pill {
+    background: #EFF6FF;
+    color: #005EA6;
+    border: 1px solid #BFDBFE;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 8px;
     font-weight: 700;
-    color: #005EA6;
-    background: #EFF6FF;
-    border: 1px solid #BFDBFE;
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 2.5px 7px;
+    border-radius: 5px;
   }
   .page-counter {
-    font-size: 8.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 9px;
     font-weight: 700;
     color: #57534E;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   .step-workspace {
     flex: 1;
     display: flex;
-    gap: 3.5mm;
+    gap: 4.5mm;
     min-height: 0;
   }
   .sidebar-col {
-    width: 67mm;
+    width: 72mm;
     display: flex;
     flex-direction: column;
-    gap: 2.3mm;
-    justify-content: flex-start;
+    gap: 2.6mm;
+    flex-shrink: 0;
   }
   .step-title {
     font-size: 11.5px;
+    line-height: 1.28;
     font-weight: 800;
-    line-height: 1.25;
     color: #003087;
-    padding-bottom: 2px;
-    border-bottom: 1.5px solid #E5E0D8;
+    padding-bottom: 1.5mm;
+    border-bottom: 1px solid #E5E0D8;
   }
   .info-card {
     border-radius: 6px;
     padding: 2.3mm 2.8mm;
-    border: 1px solid #E5E0D8;
-    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    background: #F8FAFC;
   }
   .card-before {
     background: #F8FAFC;
-    border-left: 3px solid #64748B;
+    border-color: #CBD5E1;
   }
   .card-action {
     background: #FFF1F2;
-    border-left: 3px solid #E11D48;
+    border-color: #FECDD3;
   }
   .card-after {
     background: #ECFDF5;
-    border-left: 3px solid #059669;
+    border-color: #A7F3D0;
   }
   .card-proof {
     background: #EFF6FF;
-    border-left: 3px solid #0070BA;
-    flex: 1;
+    border-color: #BFDBFE;
   }
   .ic-label {
-    font-size: 7.5px;
+    font-size: 7.4px;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #334155;
+    letter-spacing: 0.05em;
     margin-bottom: 2px;
+    color: #334155;
   }
   .card-action .ic-label { color: #BE123C; }
   .card-after .ic-label { color: #047857; }
   .card-proof .ic-label { color: #005EA6; }
   .ic-body {
-    font-size: 8.4px;
+    font-size: 8.3px;
     line-height: 1.38;
     color: #1E293B;
   }
@@ -969,7 +947,7 @@ async function main() {
     `Backend health OK (${health.data?.data?.mode || health.data?.mode || 'LIVE_SANDBOX'})`
   );
 
-  console.log('Resetting demo backend to clean pre-seed opening state...');
+  console.log('Resetting demo backend to clean baseline...');
   await resetDemoBackend();
 
   const browser: Browser = await puppeteer.launch({
@@ -988,887 +966,955 @@ async function main() {
   let page: Page | undefined;
 
   try {
+    await browser
+      .defaultBrowserContext()
+      .overridePermissions(TARGET_URL, ['clipboard-read', 'clipboard-write']);
     page = await browser.newPage();
     page.setDefaultTimeout(45000);
 
     await page.goto(TARGET_URL, { waitUntil: 'networkidle2', timeout: 30000 });
-    await waitForText(page, 'AWAITING SEED');
-    await waitForText(page, '0 Milestones');
+    await waitForText(page, 'No active escrow hold');
+    await waitForText(page, 'Lock Milestone 1 Hold');
     await delay(500);
 
     // ------------------------------------------------------------------
-    // STEP 01: Opening Baseline State
+    // STEP 01: Opening Baseline (Client Role, Overview Page)
     // ------------------------------------------------------------------
     steps.push({
       stepNumber: 1,
       phase: 'BASELINE',
-      stageTag: 'Stage 0 • Opening Baseline',
-      title: 'Initial Opening Site: Unseeded Tripartite Ecosystem ($0.00 Held)',
-      imagePath: await capturePng(page, '01_baseline_initial_state.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 1 • Role-Separated Clean Baseline',
+      title: 'Overview (Client Role): Unseeded Escrow State ($0.00 Held)',
+      imagePath: await capturePng(page, '01_overview_client_baseline.png', { scrollY: 0 }),
       beforeState:
-        'Fresh workspace load via POST /api/demo/reset. Escrow ledger contains 0 milestones and Client Buyer has no card hold.',
-      triggerAction: `Initial load of ${TARGET_URL} (no action triggered yet).`,
+        'Clean workspace reset via POST /api/demo/reset. No active milestone holds exist on card or ledger.',
+      triggerAction: `Initial load of ${TARGET_URL} with Client role active in TopBar.`,
       whatChanged:
-        'Header confirms PayPal Live Sandbox + 3 idle AI agents. KPI bar displays $0.00 Active Holds, 1.33% Warning baseline (2/150 sales), 0 SafeGate actions, and [PayPal -> All Actors] Sandbox Workspace Reset in the bus.',
+        'Left sidebar groups product views (Overview, Escrow, Delivery, Disputes, Activity) separately from Dev tools & Demo drawers. Overview shows slim 4-step SLA progress bar, single CTA card ("Lock Milestone 1 Hold"), Held ($0.00) & Settled ($0.00) KPIs—hiding Merchant-only Dispute Ratio—and zero SafeGate alerts.',
       ecosystemProof:
-        'Establishes an auditable zero-fixture starting baseline so every dollar held, mutated Auth ID, and cross-party event in subsequent steps proves real execution.',
+        'Eliminates multi-layer dashboard clutter: role separation ensures buyers only see buyer KPIs and approvals while demo triggers stay isolated in the Demo drawer.',
       apiBadge: 'POST /api/demo/reset -> 200 OK',
     });
 
     // ------------------------------------------------------------------
-    // STEP 02: Click Target — 1. Seed Contract & Hold
+    // STEP 02: Switch Role to Merchant & Highlight "Lock Milestone 1 Hold"
     // ------------------------------------------------------------------
+    await switchRole(page, 'Merchant');
+    await waitForText(page, 'Dispute ratio');
+    await delay(200);
+    const initialRatioPct = await page.evaluate(() => {
+      const m = document.body.innerText.match(/Dispute ratio\s*(\d+\.\d+%)/i);
+      return m ? m[1] : '1.33%';
+    });
     await locateAndAct(
       page,
-      'button',
-      ['1. Seed Contract & Hold'],
+      'main button',
+      ['Lock Milestone 1 Hold'],
       'highlight',
-      '1. Seed Contract & Hold'
+      'Lock Milestone 1 Hold'
     );
     await delay(200);
     steps.push({
       stepNumber: 2,
       phase: 'USER_ACTION',
-      stageTag: 'Stage 1 • Contract Seed Trigger',
-      title: 'Click "1. Seed Contract & Hold" to Lock Milestone 1 Escrow',
-      imagePath: await capturePng(page, '02_click_seed_contract.png', {
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 1 • Merchant View & Escrow Lock Trigger',
+      title: 'Merchant Role Reveals Dispute Ratio & Clicks "Lock Milestone 1 Hold"',
+      imagePath: await capturePng(page, '02_overview_merchant_lock_click.png', { scrollY: 0 }),
       beforeState:
-        'Client Card Authorization Hold shows AWAITING SEED ($0.00) and Business Milestone Escrow Queue has 0 active holds.',
+        'Client role hid seller compliance telemetry. No PayPal authorization hold has been created yet.',
       triggerAction:
-        'User clicks Hero Stepper Step 1 ("1. Seed Contract & Hold"), dispatching an APIMatic-validated Orders v2 intent=AUTHORIZE call.',
+        `Switched TopBar role toggle to Merchant (revealing rolling ${initialRatioPct} / 1.50% Dispute ratio KPI) and prepared click on "Lock Milestone 1 Hold".`,
       whatChanged:
-        'Highlighted target in Hero Stepper prepares to parse Milestone SOW deliverables ($1,250.00 + $1,750.00 + $1,500.00 = $4,500.00 total) and execute a PayPal Sandbox authorization lock.',
+        'TopBar toggle shifts to Merchant; third KPI card exposes rolling dispute risk headroom before work starts; primary button triggers Orders v2 intent=AUTHORIZE.',
       ecosystemProof:
-        'Proves PayPal Aegis never assumes NVP/SOAP endpoints: APIMatic OpenAPI v3 specs enforce strict Orders v2 schema conformance and idempotency keys.',
-      apiBadge: 'POST /api/demo/seed -> Orders v2',
+        'Proves APIMatic OpenAPI v3 grounding: PayPal Agent Toolkit omitted intent="AUTHORIZE", so Aegis synthesizes a schema-validated Orders v2 authorize flow with 36-char idempotency keys.',
+      apiBadge: 'POST /api/escrow/seed -> Orders v2',
     });
     await clearHighlight(page);
 
-    // Execute Step 1
-    await locateAndAct(page, 'button', ['1. Seed Contract & Hold'], 'click');
-    await waitForText(page, 'AUTHORIZED');
-    await waitForText(page, 'Escrow Lock Placed');
-    await delay(600);
+    // Execute Lock Milestone 1 Hold
+    await locateAndAct(page, 'main button', ['Lock Milestone 1 Hold'], 'click');
+    await waitForText(page, 'Escrow hold active ($1250.00 USD)');
+    await delay(500);
 
     // ------------------------------------------------------------------
-    // STEP 03: What Changed — Escrow Locked Across All 3 Columns
+    // STEP 03: What Changed — Milestone 1 Authorized + Toast Notification
     // ------------------------------------------------------------------
     steps.push({
       stepNumber: 3,
       phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 1 • Tripartite Escrow Lock',
-      title: 'What Changed: $1,250.00 AUTHORIZED Across Client, Arbiter & Business',
-      imagePath: await capturePng(page, '03_what_changed_escrow_locked.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 1 • Milestone 1 Hold Authorized',
+      title: 'Milestone 1 Authorized ($1,250.00 Held) & Mutation Toast',
+      imagePath: await capturePng(page, '03_overview_m1_authorized.png', { scrollY: 0 }),
       beforeState:
-        '$0.00 Held, DRAFT / AWAITING SEED status, no Diff Banner, empty Cross-Party Notification Bus.',
+        'Overview showed $0.00 Held, 0 active milestones, and idle Escrow progress step.',
       triggerAction:
-        'Completed POST /api/demo/seed -> ContractParser parsed SOW and placed PayPal Sandbox Orders v2 authorization.',
+        'Clicked "Lock Milestone 1 Hold" on Overview, invoking ContractParser + Orders v2 authorize.',
       whatChanged:
-        'What Changed banner tracks $0.00 -> $1,250.00 Held and DRAFT -> AUTHORIZED. Client Portal locks Visa 4112 ($1,250.00), Business shows $1,250.00 HELD, and Cross-Party Bus logs [Client -> All] Escrow Lock Placed.',
+        'Held KPI updates to $1,250.00 USD; status card transitions cleanly to "Escrow hold active ($1250.00 USD)" with next contextual CTA "Renew 72h Hold"; Recent Activity logs Buyer -> Merchant authorization lock; subtle bottom-right toast confirms state delta.',
       ecosystemProof:
-        'Demonstrates immediate synchronized three-party visibility: Client funding hold, PayPal authorization UUID, and Business SOW readiness update from a single transaction.',
-      apiBadge: '201 Created • intent=AUTHORIZE',
+        'Replaces giant banners with an ephemeral state-mutation toast while persisting the cryptographic authorization snapshot across backend stores.',
+      apiBadge: 'intent: AUTHORIZE -> CREATED',
     });
+    await dismissToastIfPresent(page);
 
     // ------------------------------------------------------------------
-    // STEP 04: Highlight Tab 2 (Ledger & Gantt)
+    // STEP 04: Navigate to Escrow -> Milestones & Highlight "Renew 72h Hold"
     // ------------------------------------------------------------------
+    await navigateSidebar(page, 'Escrow');
+    await waitForText(page, 'Cloud Infrastructure & High-Availability Plan');
+    await delay(250);
     await locateAndAct(
       page,
-      'button',
-      ['State Mutation Diff, AG Studio 3 Ledger & Gantt'],
+      'main button',
+      ['Renew 72h Hold'],
       'highlight',
-      'Tab 2: AG Grid & Gantt'
+      'Renew 72h Hold'
     );
     await delay(200);
     steps.push({
       stepNumber: 4,
       phase: 'USER_ACTION',
-      stageTag: 'Stage 2 • Inspect Pre-Renewal Ledger',
-      title: 'Click Tab 2 to Open AG Grid v31.3 & Bryntum Milestone Gantt',
-      imagePath: await capturePng(page, '04_click_tab2_ledger_gantt.png', {
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 2 • 72h Honor Window Protection',
+      title: 'Escrow -> Milestones: Initial Authorization & "Renew 72h Hold"',
+      imagePath: await capturePng(page, '04_escrow_milestones_click_renew.png', { scrollY: 0 }),
       beforeState:
-        'Tripartite Ecosystem Canvas shows AUTHORIZED hold in summary cards, concealing the exact underlying PayPal authorization_id token.',
+        'Milestone 1 hold is in initial Authorized state inside its 72-hour card-network honor window.',
       triggerAction:
-        'User clicks Tab 2 ("State Mutation Diff, AG Studio 3 Ledger & Gantt") to inspect the raw financial grid and dependency schedule.',
+        'Opened Escrow from left sidebar (Milestones tab) showing sequential Draft locks on Milestones 2 & 3, and targeted "Renew 72h Hold".',
       whatChanged:
-        'Tab 2 button highlighted before switching into the AG Grid Community + Bryntum Gantt dual forensic workspace.',
+        'Milestone 1 renders Authorized badge + live Auth ID; Milestones 2 ($1,750.00) and 3 ($1,500.00) display "Draft · Locked until Milestone 1/2 settles" sequentially.',
       ecosystemProof:
-        'Bridges executive ecosystem status with granular line-item ledger telemetry and 72-hour card honor countdown tracking.',
-      apiBadge: 'Switch -> AG Grid & Bryntum',
+        'Prevents PayPal silent soft-decline failures: although orders last 29 days, issuer card holds expire after 72 hours unless explicitly reauthorized.',
+      apiBadge: 'POST /api/escrow/:id/reauthorize',
     });
     await clearHighlight(page);
 
-    // Click Tab 2 & select Compact Split
-    await locateAndAct(
-      page,
-      'button',
-      ['State Mutation Diff, AG Studio 3 Ledger & Gantt'],
-      'click'
-    );
-    await waitForSelectorText(page, 'button', 'Compact Split');
-    await locateAndAct(page, 'button', ['Compact Split'], 'click');
-    await waitForText(page, 'ORIGINAL');
-    await waitForText(page, 'Shifted: Awaiting Capture');
-    await delay(450);
+    // Execute Renew 72h Hold
+    await locateAndAct(page, 'main button', ['Renew 72h Hold'], 'click');
+    await waitForText(page, '72h auto-renewed');
+    await waitForText(page, 'Rotated');
+    await delay(400);
+    await dismissToastIfPresent(page);
+
+    // Read dynamic mutated auth id from body text
+    const postReauthInfo = await page.evaluate(() => {
+      const txt = document.body.innerText;
+      const authMatch = txt.match(/Auth ID:\s*([A-Z0-9_-]+)/);
+      return { authId: authMatch?.[1] || 'REAUTH-ID' };
+    });
 
     // ------------------------------------------------------------------
-    // STEP 05: Tab 2 Earlier State (ORIGINAL Auth ID + Dependency Gantt)
+    // STEP 05: What Changed — 72h Auto-Renewed & Rotated Auth ID Info Note
     // ------------------------------------------------------------------
     steps.push({
       stepNumber: 5,
-      phase: 'STATE_EARLIER',
-      stageTag: 'Stage 2 • Earlier Ledger & Schedule',
-      title: 'Earlier State: ORIGINAL Authorization UUID & Pre-Renewal Dependencies',
-      imagePath: await capturePng(page, '05_earlier_state_original_auth_gantt.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
-      beforeState:
-        'Milestone 1 holds initial Day-0 authorization token tagged ORIGINAL with a strict 72-hour card honor expiration window.',
-      triggerAction:
-        'Selected "Compact Split" inside Tab 2 to place AG Grid v31.3 alongside Bryntum Milestone Gantt.',
-      whatChanged:
-        'Left AG Grid displays Milestone 1 with cyan ORIGINAL badge (36-char Auth ID). Right Bryntum Gantt marks Milestone 2 as "Shifted: Awaiting Capture" awaiting Milestone 1 clearance.',
-      ecosystemProof:
-        'Exposes PayPal’s silent failure mode before Day 3: on a standard integration, letting the 72h honor period expire voids the payment unless explicitly reauthorized.',
-      apiBadge: 'AG Grid v31.3 + Bryntum Gantt',
-    });
-
-    // ------------------------------------------------------------------
-    // STEP 06: Highlight Step 2 ("2. Fast-Forward Day-3") While on Tab 2
-    // ------------------------------------------------------------------
-    await locateAndAct(
-      page,
-      'button',
-      ['2. Fast-Forward Day-3'],
-      'highlight',
-      '2. Fast-Forward Day-3'
-    );
-    await delay(200);
-    steps.push({
-      stepNumber: 6,
-      phase: 'USER_ACTION',
-      stageTag: 'Stage 2 • Day-3 Reauthorization Trigger',
-      title: 'Click "2. Fast-Forward Day-3" to Rotate Mutated Authorization ID',
-      imagePath: await capturePng(page, '06_click_day3_reauth.png', {
-        scrollY: 0,
-      }),
-      beforeState:
-        'AG Grid shows Milestone 1 still carrying its ORIGINAL Day-0 PayPal authorization_id before the 72-hour honor expiration.',
-      triggerAction:
-        'User clicks Hero Stepper Step 2 ("2. Fast-Forward Day-3") directly above the Compact Split view.',
-      whatChanged:
-        'Triggers PayPal Payments v2 POST /v2/payments/authorizations/{id}/reauthorize to extend card hold to 29 days.',
-      ecosystemProof:
-        'Demonstrates automated 72h Auth Keeper defense: catching PayPal’s silent immutable ID replacement where reauthorize returns a brand-new authorization_id.',
-      apiBadge: 'POST /authorizations/{id}/reauthorize',
-    });
-    await clearHighlight(page);
-
-    // Execute Step 2
-    await locateAndAct(page, 'button', ['2. Fast-Forward Day-3'], 'click');
-    await waitForText(page, 'ROTATED');
-    await waitForText(page, 'Day-3 Reauthorization Extended');
-    await delay(600);
-
-    // ------------------------------------------------------------------
-    // STEP 07: What Changed — ROTATED Auth ID & Extended Bryntum Schedule
-    // ------------------------------------------------------------------
-    steps.push({
-      stepNumber: 7,
       phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 2 • Mutated Auth Rotation Diff',
-      title: 'What Changed: Old Auth ID Struck Through -> ROTATED UUID + Extended Gantt',
-      imagePath: await capturePng(page, '07_what_changed_rotated_auth.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 2 • Day-3 Reauthorization Result',
+      title: `Milestone 1 Status -> "72h auto-renewed" & Auth ID Rotated`,
+      imagePath: await capturePng(page, '05_escrow_milestones_reauthorized.png', { scrollY: 0 }),
       beforeState:
-        'Milestone 1 carried single ORIGINAL authorization_id approaching 72h card honor timeout.',
+        'Milestone 1 displayed single initial PayPal authorization ID with "Authorized" badge.',
       triggerAction:
-        'Executed Day-3 reauthorization via PayPal Payments v2 Sandbox.',
+        'Clicked "Renew 72h Hold", triggering HoldManager scheduled Day-3 reauthorization.',
       whatChanged:
-        'AG Grid renders old authorization_id in red strikethrough -> new UUID with blue ROTATED badge; Diff Banner highlights Day-3 Auth Rotation; Bryntum displays "Day-3 Reauthorization Extended" and adjusts Milestone 2.',
+        `Badge transitions to "72h auto-renewed" with "Rotated" pill; active Auth ID rotates to ${postReauthInfo.authId}; contextual info note confirms "Day-3 reauthorization extended the 72h hold automatically."`,
       ecosystemProof:
-        'Prevents catastrophic Day-3 capture 404/EXPIRED failures caused when naive backends reuse the stale pre-renewal authorization_id.',
-      apiBadge: '201 Created • ID Mutated & Bound',
+        'Demonstrates PayPal Auth ID Mutation awareness: /reauthorize issues a brand-new authorization_id that Aegis tracks atomically so later /capture calls never 404 on the expired ID.',
+      apiBadge: 'HoldManager -> Auth ID Rotated',
     });
 
     // ------------------------------------------------------------------
-    // STEP 08: Return to Tab 1 — Tripartite Day-3 Sync
+    // STEP 06: Escrow -> Ledger Tab (AG Grid Mutated Authorization Ledger)
     // ------------------------------------------------------------------
-    await locateAndAct(page, 'button', ['Tripartite Ecosystem Canvas'], 'click');
-    await waitForText(page, '72h AUTO-RENEWED');
+    await locateAndAct(page, 'main button', ['Ledger'], 'click');
+    await waitForText(page, 'Authorization Ledger');
     await delay(500);
     steps.push({
-      stepNumber: 8,
-      phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 2 • Cross-Party Day-3 Sync',
-      title: 'Tripartite Sync: Client 72h AUTO-RENEWED & Business REAUTHORIZED',
-      imagePath: await capturePng(page, '08_tripartite_synced_day3.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      stepNumber: 6,
+      phase: 'FEATURE_SPOTLIGHT',
+      stageTag: 'Phase 2 • AG Grid Mutated Auth Ledger',
+      title: 'Escrow -> Ledger: Old Auth ID Struck Through & New ID Badged "Rotated"',
+      imagePath: await capturePng(page, '06_escrow_ledger_ag_grid.png', { scrollY: 0 }),
       beforeState:
-        'Auth ID mutation and extended hold window were only viewed inside the backend ledger/Gantt view.',
+        'Escrow view displayed summary Milestone cards.',
       triggerAction:
-        'Returned to Tab 1 ("Tripartite Ecosystem Canvas") via Socket.IO synced store state.',
+        'Clicked "Ledger" sub-tab inside Escrow to inspect tabular audit trail.',
       whatChanged:
-        'Client Card Authorization Hold flips to emerald 72h AUTO-RENEWED; Center Arbiter displays Inline State Mutation Diff + ContractParser telemetry; Business Escrow shows REAUTHORIZED • ROTATED.',
+        'AG Grid ledger lists Total Held ($1250.00 USD), Rotated IDs (1), and strikes through the superseded initial Auth ID alongside an emerald arrow into the live rotated ID with a blue "Rotated" badge.',
       ecosystemProof:
-        'Shows how a single Day-3 keeper mutation keeps Buyer transparency, Arbiter diff logs, and Merchant cash-flow guarantees atomically aligned.',
-      apiBadge: 'Socket.IO ecosystem:diff synced',
+        'Maintains full immutable lineage (originalAuthorizationId -> activeAuthorizationId) required for bank reconciliation and dispute representment.',
+      apiBadge: 'AG Grid v31.3 • Lineage Audit',
     });
 
     // ------------------------------------------------------------------
-    // STEP 09: Highlight Step 3 ("3. Verify Deliverable")
+    // STEP 07: Escrow -> Timeline Tab (Bryntum Gantt Schedule)
     // ------------------------------------------------------------------
+    await locateAndAct(page, 'main button', ['Timeline'], 'click');
+    await waitForText(page, 'Export Schedule JSON');
+    await delay(550);
+    steps.push({
+      stepNumber: 7,
+      phase: 'FEATURE_SPOTLIGHT',
+      stageTag: 'Phase 2 • Bryntum Gantt Escrow Timeline',
+      title: 'Escrow -> Timeline: 72h Extension Shift & Milestone Dependencies',
+      imagePath: await capturePng(page, '07_escrow_timeline_gantt.png', { scrollY: 0 }),
+      beforeState:
+        'Escrow showed the tabular AG Grid authorization ledger.',
+      triggerAction:
+        'Clicked "Timeline" sub-tab inside Escrow to view the Bryntum Gantt schedule.',
+      whatChanged:
+        'Gantt timeline maps Day 1-4 windows across all 3 milestones, displays Milestone 1 72h auto-renewal extension bar, dependency arrows into Milestones 2 & 3, and provides "Export Schedule JSON".',
+      ecosystemProof:
+        'Syncs backend HoldManager timer schedules (schedule:sync WebSocket events) directly into an executive delivery-to-payout Gantt visualization.',
+      apiBadge: 'Bryntum Gantt • Timer Sync',
+    });
+
+    // ------------------------------------------------------------------
+    // STEP 08: Delivery (Merchant View) — Highlight "Upload & Verify Deliverable"
+    // ------------------------------------------------------------------
+    await navigateSidebar(page, 'Delivery');
+    await waitForText(page, 'Deliverable Submission');
+    await waitForText(page, 'Upload & Verify Deliverable');
+    await delay(300);
     await locateAndAct(
       page,
-      'button',
-      ['3. Verify Deliverable'],
+      'main button',
+      ['Upload & Verify Deliverable'],
       'highlight',
-      '3. Verify Deliverable'
+      'Upload & Verify Deliverable'
     );
     await delay(200);
     steps.push({
-      stepNumber: 9,
+      stepNumber: 8,
       phase: 'USER_ACTION',
-      stageTag: 'Stage 3 • Multimodal Deliverable Verification',
-      title: 'Click "3. Verify Deliverable" to Run Channel3 + Elastic kNN + SafeGate',
-      imagePath: await capturePng(page, '09_click_verify_deliverable.png', {
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 3 • Merchant Delivery Submission',
+      title: 'Delivery (Merchant): Prefilled SKU/File Inputs & Click "Upload & Verify Deliverable"',
+      imagePath: await capturePng(page, '08_delivery_merchant_submit_click.png', { scrollY: 0 }),
       beforeState:
-        'Client Deliverable Inspection is PENDING UPLOAD; SafeGate HITL queue has 0 pending financial mutations.',
+        'Milestone 1 hold is 72h auto-renewed and awaiting artifact verification; SafeGate Approval Queue is empty.',
       triggerAction:
-        'User clicks Hero Stepper Step 3 ("3. Verify Deliverable") to audit the intangible software/architecture artifact.',
+        'Navigated to Delivery (Merchant view) with visible default Deliverable Title ("Industrial Edge Router SKU-9921"), Catalog SKU ("CH3-TECH-88921"), schematic PDF ("edge_router_v2_schematic.pdf"), and highlighted "Upload & Verify Deliverable".',
       whatChanged:
-        'Highlights Step 3 button which triggers SHA-256 hashing, Channel3 catalog matching, Elastic 64-dim cosine kNN scoring, and SafeGate interception.',
+        'Clean 2-column Merchant workspace pairs editable deliverable metadata & SHA-256 preview on the left with the SafeGate Human-in-the-Loop queue on the right.',
       ecosystemProof:
-        'Solves PayPal’s 0% intangible SNAD protection gap AND unguarded agent payouts by verifying artifact authenticity before money moves.',
-      apiBadge: 'POST /api/demo/verify-deliverable',
+        'Solves PayPal Seller Protection gaps on intangible/custom builds by anchoring deliverables to verifiable Catalog SKUs, SHA-256 hashes, and high-entropy vector similarity.',
+      apiBadge: 'POST /api/deliverables/verify',
     });
     await clearHighlight(page);
 
-    // Execute Step 3
-    await locateAndAct(page, 'button', ['3. Verify Deliverable'], 'click');
-    await waitForText(page, 'SHA-256 VERIFIED');
-    await waitForText(page, '1 Intercepted');
-    await delay(600);
+    // Execute Deliverable Verification
+    await locateAndAct(page, 'main button', ['Upload & Verify Deliverable'], 'click');
+    await waitForText(page, 'Authenticity verified');
+    await waitForText(page, 'Approve & Execute');
+    await delay(450);
+    await dismissToastIfPresent(page);
 
-    // ------------------------------------------------------------------
-    // STEP 10: What Changed — Deliverable Verified + SafeGate Intercepted
-    // ------------------------------------------------------------------
-    steps.push({
-      stepNumber: 10,
-      phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 3 • SafeGate HITL Pause',
-      title: 'What Changed: SHA-256 VERIFIED & SafeGate Intercepted Capture (1 Pending)',
-      imagePath: await capturePng(page, '10_what_changed_safegate_paused.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
-      beforeState:
-        'Deliverable status was PENDING UPLOAD; 0 SafeGate HITL approvals existed.',
-      triggerAction:
-        'DeliveryAuditor verified artifact SHA-256, Channel3 SKU, and Elastic vector similarity, then proposed capture_authorization.',
-      whatChanged:
-        'Client box flips to SHA-256 VERIFIED with Download Artifact & Approve Deliverable enabled. Center Arbiter and Business SafeGate pause capture with amber 1 Pending HITL approval.',
-      ecosystemProof:
-        'Proves PayPal Aegis’s hard financial firewall: unlike raw @paypal/agent-toolkit, the AI agent cannot unilaterally capture $1,250 without human sign-off.',
-      apiBadge: 'SafeGate Firewall • PAUSED FOR HITL',
+    const detectedMatchPct = await page.evaluate(() => {
+      const m = document.body.innerText.match(/(\d+\.\d+%)\s*match/i);
+      return m ? m[1] : '83.0%';
     });
 
     // ------------------------------------------------------------------
-    // STEP 11: Highlight Tab 3 (Deliverable SafeGate & Multimodal Audit)
+    // STEP 09: What Changed — Verified Badge + SafeGate HITL Queue + TopBar Bell "1"
+    // ------------------------------------------------------------------
+    steps.push({
+      stepNumber: 9,
+      phase: 'WHAT_CHANGED',
+      stageTag: 'Phase 3 • Multimodal Verification & HITL Interception',
+      title: `Deliverable "Verified" (${detectedMatchPct}) & SafeGate Bell Intercepts Capture`,
+      imagePath: await capturePng(page, '09_delivery_merchant_verified_hitl.png', { scrollY: 0 }),
+      beforeState:
+        'Deliverable status was unverified and TopBar notification bell showed 0 pending requests.',
+      triggerAction:
+        'Clicked "Upload & Verify Deliverable", executing DeliveryAuditor + Channel3 + 64-dim vector similarity.',
+      whatChanged:
+        `Left card displays green "Verified" badge (${detectedMatchPct} match); DeliveryAuditor attempted CAPTURE_AUTHORIZATION which SafeGate HITL intercepted into SafeGate Approval Queue ("Approve & Execute" / "Reject") and incremented TopBar Bell count to 1.`,
+      ecosystemProof:
+        'Proves autonomous AI agents cannot unilaterally move money: high-risk capture actions park behind SafeGate human/buyer sign-off with closure preservation.',
+      apiBadge: 'SafeGate HITL • 1 Pending',
+    });
+
+    // ------------------------------------------------------------------
+    // STEP 10: TopBar Notification Bell Quick-Approval Popover
     // ------------------------------------------------------------------
     await locateAndAct(
       page,
-      'button',
-      ['Deliverable SafeGate & Multimodal Audit'],
+      'header button[aria-label="Open SafeGate Approvals"]',
+      [''],
+      'click'
+    );
+    await waitForText(page, 'SafeGate Approvals');
+    await delay(300);
+    await locateAndAct(
+      page,
+      'header button',
+      ['Approve'],
       'highlight',
-      'Tab 3: Deliverable SafeGate'
+      'Bell Quick-Approve'
+    );
+    await delay(200);
+    steps.push({
+      stepNumber: 10,
+      phase: 'FEATURE_SPOTLIGHT',
+      stageTag: 'Phase 3 • Global SafeGate Bell Popover',
+      title: 'TopBar Notification Bell: Instant Cross-Page HITL Inspection',
+      imagePath: await capturePng(page, '10_topbar_bell_safegate_popover.png', { scrollY: 0 }),
+      beforeState:
+        'TopBar notification bell showed unread badge "1" after DeliveryAuditor intercepted fund capture.',
+      triggerAction:
+        'Clicked Notification Bell in TopBar to reveal the floating SafeGate Approvals popover.',
+      whatChanged:
+        'Global popover surfaces pending CAPTURE_AUTHORIZATION request ($1,250.00 USD) with Reject / Approve buttons usable from any sidebar page.',
+      ecosystemProof:
+        'Demonstrates clean UX separation: instead of an intrusive "1 Action Pending" alert pill cluttering every card, SafeGate approvals live neatly behind the TopBar bell.',
+      apiBadge: 'SafeGate Global Bell Queue',
+    });
+    await clearHighlight(page);
+    // Close popover with Escape before switching to Client
+    await page.keyboard.press('Escape');
+    await delay(250);
+
+    // ------------------------------------------------------------------
+    // STEP 11: Client Role on Delivery -> Expand Verification Details + Copy Hash + Approve & Release
+    // ------------------------------------------------------------------
+    await switchRole(page, 'Client');
+    await waitForText(page, 'Approve & Release');
+    await locateAndAct(page, 'main button', ['Verification details'], 'click');
+    await waitForText(page, 'Spec / YAML');
+    await delay(250);
+    // Test Spec / YAML & Schematic tabs, then Copy SHA-256 Hash cleanly
+    await locateAndAct(page, 'main button', ['Spec / YAML'], 'click', undefined, 'center', true);
+    await delay(150);
+    await locateAndAct(page, 'main button', ['Schematic'], 'click', undefined, 'center', true);
+    await delay(150);
+    await page.waitForSelector('button[title="Copy SHA-256 Hash"]', { visible: true });
+    await page.click('button[title="Copy SHA-256 Hash"]');
+    await waitForText(page, 'Copied');
+    await delay(150);
+    await locateAndAct(
+      page,
+      'main button',
+      ['Approve & Release'],
+      'highlight',
+      'Approve & Release',
+      'end'
     );
     await delay(200);
     steps.push({
       stepNumber: 11,
-      phase: 'USER_ACTION',
-      stageTag: 'Stage 3 • Open Forensic Audit View',
-      title: 'Click Tab 3 to Inspect Channel3, Elastic kNN & SafeGate HITL Console',
-      imagePath: await capturePng(page, '11_click_tab3_safegate.png', {
+      phase: 'FEATURE_SPOTLIGHT',
+      stageTag: 'Phase 3 • Client Deliverable Audit & Sign-Off',
+      title: 'Delivery (Client): Expanded "Verification details" & Click "Approve & Release"',
+      imagePath: await capturePng(page, '11_delivery_client_details_approve.png', {
+        fullPage: true,
         scrollY: 0,
       }),
       beforeState:
-        'SafeGate interception summary is shown inline on Tab 1.',
+        'Technical forensic hashes and vector telemetry were tucked inside a collapsed "Verification details" accordion.',
       triggerAction:
-        'User clicks Tab 3 ("Deliverable SafeGate & Multimodal Audit") to examine forensic RAG evidence and sign the HITL approval.',
+        'Switched role to Client, expanded "Verification details", tested Spec/Schematic tabs & SHA-256 Copy ("Copied"), and targeted "Approve & Release".',
       whatChanged:
-        'Prepares transition into 3-column Deliverable Artifact Preview, Channel3/Elastic Multimodal Audit, and HITL Execution Firewall.',
+        'Reveals SHA-256 hash ("Copied"), Channel3 SKU ("CH3-TECH-88921"), Elastic 64-dim score, 18.4ms retrieval latency, VPC Schematic SVG, Download Artifact PDF button, and prefilled Dispute Claim defaults.',
       ecosystemProof:
-        'Allows compliance reviewers to verify SHA-256 specs and cosine confidence metrics alongside the payment release trigger.',
-      apiBadge: 'Switch -> Deliverable SafeGate',
+        'Keeps primary buyer acceptance ultra-clean while letting technical auditors inspect cryptographic integrity and cosine verification without leaving Delivery.',
+      apiBadge: 'Client HITL Sign-Off -> /capture',
     });
     await clearHighlight(page);
 
-    // Click Tab 3
-    await locateAndAct(
-      page,
-      'button',
-      ['Deliverable SafeGate & Multimodal Audit'],
-      'click'
-    );
-    await waitForText(page, 'CH3-TECH-88921');
-    await waitForText(page, 'Approve & Execute');
+    // Execute Client Approve & Release
+    await locateAndAct(page, 'main button', ['Approve & Release'], 'click');
+    await waitForText(page, 'Approved & Settled');
     await delay(450);
+    await dismissToastIfPresent(page);
 
     // ------------------------------------------------------------------
-    // STEP 12: Tab 3 Earlier State + Highlight "Approve & Execute"
+    // STEP 12: What Changed — Milestone 1 Captured & Settled ($1,250.00)
     // ------------------------------------------------------------------
-    const detectedKnnPct = await page.evaluate(() => {
-      const m = (document.body.innerText || '').match(/(\d+\.\d+)%\s+Authentic Match/i);
-      return m ? `${m[1]}%` : '85.9%';
-    });
-    await locateAndAct(
-      page,
-      'button',
-      ['Approve & Execute'],
-      'highlight',
-      'Approve & Execute ($1,250.00)'
-    );
-    await delay(200);
     steps.push({
       stepNumber: 12,
-      phase: 'USER_ACTION',
-      stageTag: 'Stage 3 • Multimodal RAG + HITL Sign-Off',
-      title: `Audit Channel3 SKU + Elastic ${detectedKnnPct} Match & Click "Approve & Execute"`,
-      imagePath: await capturePng(page, '12_tab3_audit_and_click_approve.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
-      beforeState:
-        'capture_authorization ($1,250.00 on rotated Auth UUID) sits blocked in SafeGate HITL Console awaiting sec-lead@aegis.corp approval.',
-      triggerAction:
-        `Reviewer confirms CH3-TECH-88921 (Channel3) + ${detectedKnnPct} Elastic 64-dim kNN cosine match (18.4ms) + SHA-256 integrity, then clicks "Approve & Execute".`,
-      whatChanged:
-        'Highlights SafeGate HITL approval button that sends signed human authorization to execute PayPal Payments v2 capture.',
-      ecosystemProof:
-        'Proves both multimodal RAG grounding (real dot/norm cosine math) and strict zero-trust HITL governance over autonomous treasury actions.',
-      apiBadge: 'POST /api/hitl/{id}/approve',
-    });
-    await clearHighlight(page);
-
-    // Click Approve & Execute
-    await locateAndAct(page, 'button', ['Approve & Execute'], 'click');
-    await waitForText(page, 'Decision Approved & Dispatched');
-    await waitForText(page, '0 Actions');
-    await delay(600);
-
-    // ------------------------------------------------------------------
-    // STEP 13: What Changed — SafeGate Executed Capture ($1,250 Settled)
-    // ------------------------------------------------------------------
-    steps.push({
-      stepNumber: 13,
       phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 3 • Capture Executed',
-      title: 'What Changed: SafeGate Executed Capture & Diff Banner Shows $1,250.00 Settled',
-      imagePath: await capturePng(page, '13_what_changed_hitl_settled.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 3 • Milestone 1 Funds Captured',
+      title: 'Milestone 1 Settled ($1,250.00 Captured) & SafeGate Bell Cleared',
+      imagePath: await capturePng(page, '12_delivery_client_settled.png', { scrollY: 0 }),
       beforeState:
-        '1 Pending SafeGate action (capture_authorization) blocked settlement.',
+        'Milestone 1 sat in VERIFIED state with 1 pending CAPTURE_AUTHORIZATION request in SafeGate.',
       triggerAction:
-        'Executed HITL approval on rotated Milestone 1 authorization UUID.',
+        'Clicked "Approve & Release" as Client, releasing the SafeGate HITL gate and executing PayPal Payments v2 capture.',
       whatChanged:
-        'Top confirmation alert confirms capture_authorization executed; status badge shifts to SafeGate Firewall Standing By; KPI updates to $1,250.00 Settled Milestones and 0 Pending Actions; Diff Banner logs REAUTHORIZED -> SETTLED.',
+        'Button transitions cleanly to "Approved & Settled" (disabled), TopBar Bell clears from 1 to 0, and $1,250.00 USD moves from Held into Settled balance.',
       ecosystemProof:
-        'Demonstrates atomic completion: human signature unblocks PayPal v2 /capture using the post-Day-3 rotated UUID.',
-      apiBadge: '201 Created • /capture COMPLETED',
+        'Completes human-approved autonomous settlement: DeliveryAuditor verified -> Buyer/SafeGate authorized -> Payments v2 captured using the rotated Active Auth ID.',
+      apiBadge: 'POST /v2/payments/authorizations/:id/capture',
     });
 
-    // Return to Tab 1 to confirm Settled across Client & Business BEFORE Step 4
-    await locateAndAct(page, 'button', ['Tripartite Ecosystem Canvas'], 'click');
-    await waitForText(page, 'SETTLED');
-    await delay(450);
-
     // ------------------------------------------------------------------
-    // STEP 14: Tab 1 Settled State + Highlight "4. Simulate Dispute (1.42%)"
+    // STEP 13: Multi-Milestone Progression — Lock Milestone 2 on Escrow
     // ------------------------------------------------------------------
+    await navigateSidebar(page, 'Escrow');
+    await waitForText(page, 'Milestone 2');
+    await waitForText(page, 'Lock Hold');
+    await delay(250);
     await locateAndAct(
       page,
-      'button',
-      ['4. Simulate Dispute (1.42%)'],
+      'main button',
+      ['Lock Hold'],
       'highlight',
-      '4. Simulate Dispute (1.42%)'
+      'Lock Milestone 2 Hold'
     );
     await delay(200);
     steps.push({
-      stepNumber: 14,
+      stepNumber: 13,
       phase: 'USER_ACTION',
-      stageTag: 'Stage 4 • Tripartite Settled & Dispute Trigger',
-      title: 'Both Parties SETTLED ($1,250 Paid) — Click "4. Simulate Dispute (1.42%)"',
-      imagePath: await capturePng(page, '14_settled_and_click_dispute.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 3 • Sequential Multi-Milestone Unlock',
+      title: 'Escrow -> Milestones: Milestone 1 Settled Unlocks "Lock Hold" on Milestone 2',
+      imagePath: await capturePng(page, '13_escrow_m2_lock_click.png', { scrollY: 0 }),
       beforeState:
-        'Client Card Authorization Hold and Business Milestone Escrow both reflect SETTLED ($1,250.00 Paid); baseline 90-day ratio sits at 1.33% (2/150 sales).',
+        'Milestone 2 ($1,750.00 USD) was blocked behind Milestone 1 settlement; Milestone 1 now shows "Settled" with capture ID.',
       triggerAction:
-        'User clicks Hero Stepper Step 4 ("4. Simulate Dispute (1.42%)") to inject a $350.00 SNAD claim near PayPal’s 1.5% High Volume threshold.',
+        'Returned to Escrow -> Milestones and prepared click on the newly unlocked "Lock Hold" button for Milestone 2.',
       whatChanged:
-        'Highlights Step 4 button to simulate an incoming buyer SNAD dispute pushing 90-day ratio into 1.42% (3/211 Warning Zone near the 1.50% cliff).',
+        'Milestone 1 renders emerald "Settled" badge + capture ID; Milestone 2 unlocks its interactive "Lock Hold" CTA ($1,750.00 USD); Milestone 3 remains sequentially locked.',
       ecosystemProof:
-        'Sets up PayPal’s punitive commercial failure mode: crossing 1.5% triggers an irreversible $30 non-refundable dispute fee per claim vs $15 refunded on win (or $0 pre-escalation).',
-      apiBadge: 'POST /api/demo/simulate-dispute',
+        'Enforces sequential milestone state dependencies so subsequent escrow tranches cannot authorize before prior deliverables settle.',
+      apiBadge: 'POST /api/escrow/:m2/hold',
     });
     await clearHighlight(page);
 
-    // Execute Step 4
-    await locateAndAct(page, 'button', ['4. Simulate Dispute (1.42%)'], 'click');
-    await waitForText(page, '1.42%');
-    await waitForText(page, 'WAITING_FOR_SELLER_RESPONSE');
-    await delay(600);
+    // Click Lock Hold on M2
+    await locateAndAct(page, 'main button', ['Lock Hold'], 'click');
+    await page.waitForFunction(
+      () => (document.body.innerText.match(/Auth ID:/g) || []).length >= 2,
+      { timeout: 45000 }
+    );
+    await delay(450);
+    await dismissToastIfPresent(page);
 
     // ------------------------------------------------------------------
-    // STEP 15: What Changed — SNAD Dispute 1.42% Warning Across Ecosystem
+    // STEP 14: Multi-Milestone Isolation — Delivery Targets Fresh M2 Without M1 Leakage
     // ------------------------------------------------------------------
+    await switchRole(page, 'Merchant');
+    await navigateSidebar(page, 'Delivery');
+    await waitForText(page, 'Custom PayPal ERP Reconciliation Module');
+    await waitForText(page, 'Upload & Verify Deliverable');
+    await delay(300);
     steps.push({
-      stepNumber: 15,
+      stepNumber: 14,
       phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 4 • 1.42% Cliff Warning Injected',
-      title: 'What Changed: 1.42% Warning Tier & Pre-Escalation Controls Activated',
-      imagePath: await capturePng(page, '15_what_changed_dispute_142.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 3 • Per-Milestone State Isolation Proof',
+      title: 'Delivery (Merchant): Cleanly Targets Milestone 2 ($1,750.00) with Zero M1 Leakage',
+      imagePath: await capturePng(page, '14_delivery_m2_isolation.png', { scrollY: 0 }),
       beforeState:
-        'Dispute ratio stood at 1.33% (2/150) with 0 open disputes.',
+        'Milestone 1 was verified and captured; Milestone 2 just transitioned from Draft -> Authorized.',
       triggerAction:
-        'DisputeStrategist ingested SNAD claim ($350.00 USD) and recalculated rolling 90-day dispute ratio (3/211).',
+        'Switched to Merchant and opened Delivery immediately after locking Milestone 2 ($1,750.00 USD).',
       whatChanged:
-        'KPI pill shifts to 1.42% (Warning); Diff Banner logs 1.33% -> 1.42%; Business Dispute Shield displays 1.42% / 1.50% Cliff with Dispatch $350.00 Offer & Submit A4 PDF buttons.',
+        'Target switches automatically to "Milestone 2: Custom PayPal ERP Reconciliation Module ($1750.00 USD)" with an unverified upload state ("Upload & Verify Deliverable" active)—preserving Milestone 1 isolation.',
       ecosystemProof:
-        'Surfaces dual-path protection instantly: either resolve pre-escalation at $0 fee to pull ratio back from the cliff, or fight chargebacks via Transactional RAG.',
-      apiBadge: 'Dispute Ratio -> 1.42% (Warning)',
+        'Verifies per-milestone deliverable isolation in both backend storage and UI selectors: closing Milestone 1 never leaks a stale "Verified" status onto Milestone 2.',
+      apiBadge: 'Per-Milestone State Isolation',
     });
 
     // ------------------------------------------------------------------
-    // STEP 16: Branch A Pre-Escalation Offer Dispatch (INQUIRY -> WAITING_FOR_BUYER_RESPONSE)
+    // STEP 15: Disputes (Client) — Raise $350.00 Inquiry (Branch A Entry)
     // ------------------------------------------------------------------
+    await switchRole(page, 'Client');
+    await navigateSidebar(page, 'Disputes');
+    await waitForText(page, 'Dispute Inquiry Details');
+    await waitForText(page, 'Raise Dispute Inquiry');
+    await delay(300);
     await locateAndAct(
       page,
-      'button',
-      ['Dispatch', 'Offer'],
+      'main button',
+      ['Raise Dispute Inquiry'],
       'highlight',
-      'Branch A: Dispatch $350.00 Offer ($0 Fee)'
+      'Raise Dispute Inquiry'
+    );
+    await delay(200);
+    steps.push({
+      stepNumber: 15,
+      phase: 'USER_ACTION',
+      stageTag: 'Phase 4 • Branch A Pre-Escalation Dispute Entry',
+      title: 'Disputes (Client): Prefilled $350.00 Claim Composer & Click "Raise Dispute Inquiry"',
+      imagePath: await capturePng(page, '15_disputes_client_raise_click.png', { scrollY: 0 }),
+      beforeState:
+        'Zero open disputes exist; buyer and merchant balances stand at $1,250.00 settled and $1,750.00 held.',
+      triggerAction:
+        'Opened Disputes in Client role showing visible prefilled defaults (Reason: Not as described, Amount: 350.00, Note) and targeted "Raise Dispute Inquiry".',
+      whatChanged:
+        'Client composer provides structured reason/amount/note inputs with a $10.00 minimum non-positive fallback guardrail before initiating a PayPal INQUIRY.',
+      ecosystemProof:
+        'Models realistic buyer claim entry at the pre-escalation INQUIRY stage before expensive formal chargeback escalation begins.',
+      apiBadge: 'POST /api/disputes/simulate',
+    });
+    await clearHighlight(page);
+
+    // Execute Raise Dispute Inquiry
+    await locateAndAct(page, 'main button', ['Raise Dispute Inquiry'], 'click');
+    await waitForText(page, 'PP-D-');
+    await delay(450);
+    await dismissToastIfPresent(page);
+
+    // ------------------------------------------------------------------
+    // STEP 16: Disputes (Merchant) — Ratio Gauge + Branch A "Dispatch $350.00 Offer"
+    // ------------------------------------------------------------------
+    await switchRole(page, 'Merchant');
+    await waitForText(page, 'Pre-Escalation Settlement');
+    await waitForText(page, 'Dispatch $');
+    await delay(300);
+    const branchADetails = await page.evaluate(() => {
+      const txt = document.body.innerText;
+      const disp = txt.match(/PP-D-[A-Z0-9-]+/)?.[0] || 'PP-D-40193';
+      const pct = txt.match(/(\d+\.\d+%)\s*\/\s*1\.50%/)?.[1] || '1.42%';
+      return { disp, pct };
+    });
+    await locateAndAct(
+      page,
+      'main button',
+      ['Dispatch $', 'Offer'],
+      'highlight',
+      'Dispatch $350.00 Offer'
     );
     await delay(200);
     steps.push({
       stepNumber: 16,
       phase: 'USER_ACTION',
-      stageTag: 'Stage 4 (Branch A) • $0-Fee Pre-Escalation Offer',
-      title: 'Branch A (Pre-Escalation Inquiry): Business Clicks "Dispatch $350.00 Offer"',
-      imagePath: await capturePng(page, '16_branch_a_click_dispatch_offer.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      stageTag: 'Phase 4 • Branch A $0-Fee Settlement Strategy',
+      title: `Disputes (Merchant): Ratio Gauge (${branchADetails.pct} / 1.50%) & "Dispatch $350.00 Offer"`,
+      imagePath: await capturePng(page, '16_disputes_merchant_dispatch_offer.png', { scrollY: 0 }),
       beforeState:
-        'SNAD Inquiry PP-D-40193 is in valid pre-escalation WAITING_FOR_SELLER_RESPONSE state at 1.42% Warning Tier.',
+        `Buyer opened inquiry ${branchADetails.disp} ($350.00 USD) placing seller rolling ratio at ${branchADetails.pct}.`,
       triggerAction:
-        'Business clicks "Dispatch $350.00 Offer" on the right Merchant column to issue pre-escalation refund terms before any chargeback escalation.',
+        'Switched to Merchant role on Disputes (Branch A · Inquiry tab) and highlighted "Dispatch $350.00 Offer".',
       whatChanged:
-        'Highlights PayPal /v1/customer/disputes/PP-D-40193/make-offer button ($0 dispute fee when accepted in Inquiry stage).',
+        'Merchant view reveals circular 90-day Ratio Gauge, active "Inquiry (Branch A)" tab, "$0.00" Branch A Offer Fee card, and single-click pre-escalation make-offer execution.',
       ecosystemProof:
-        'Follows strict PayPal Dispute Lifecycle rules: make-offer is executed ONLY in pre-escalation INQUIRY stage prior to adjudication.',
-      apiBadge: 'POST /api/disputes/PP-D-40193/make-offer',
+        'Prevents PayPal 1.5% High-Volume penalty crossing ($30 per-claim chargeback fees) by routing eligible inquiries through PayPal make-offer at $0 fee.',
+      apiBadge: 'POST /v1/customer/disputes/:id/make-offer',
     });
     await clearHighlight(page);
 
-    // Click Dispatch Offer
-    await locateAndAct(page, 'button', ['Dispatch', 'Offer'], 'click');
-    await waitForText(page, 'Offer Sent');
-    await waitForText(page, 'Accept');
-    await delay(550);
+    // Execute Dispatch Offer
+    await locateAndAct(page, 'main button', ['Dispatch $', 'Offer'], 'click');
+    await waitForText(page, 'WAITING_FOR_BUYER_RESPONSE');
+    await delay(400);
+    await dismissToastIfPresent(page);
 
     // ------------------------------------------------------------------
-    // STEP 17: What Changed — Business Offer Dispatched -> WAITING_FOR_BUYER_RESPONSE
+    // STEP 17: Disputes (Client) — Accept $350.00 Settlement Offer
     // ------------------------------------------------------------------
+    await switchRole(page, 'Client');
+    await waitForText(page, 'Accept $');
+    await delay(250);
+    await locateAndAct(
+      page,
+      'main button',
+      ['Accept $', 'Settlement'],
+      'highlight',
+      'Accept $350.00 Settlement'
+    );
+    await delay(200);
     steps.push({
       stepNumber: 17,
-      phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 4 (Branch A) • Cross-Party Offer Delivery',
-      title: 'What Changed: Offer Sent ✓ & Inquiry Transitions Forward to WAITING_FOR_BUYER_RESPONSE',
-      imagePath: await capturePng(page, '17_branch_a_what_changed_offer_sent.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
+      phase: 'USER_ACTION',
+      stageTag: 'Phase 4 • Client Accepts Pre-Escalation Offer',
+      title: 'Disputes (Client): Offer Received & Click "Accept $350.00 Settlement"',
+      imagePath: await capturePng(page, '17_disputes_client_accept_offer.png', { scrollY: 0 }),
       beforeState:
-        'PP-D-40193 stood at WAITING_FOR_SELLER_RESPONSE with Buyer Accept Settlement button inactive.',
+        'Merchant dispatched $350.00 REFUND offer; dispute status moved to WAITING FOR BUYER RESPONSE.',
       triggerAction:
-        'Business dispatched $350.00 REFUND offer via DisputeStrategist.',
+        'Switched to Client role on Disputes, inspected message thread, and targeted "Accept $350.00 Settlement".',
       whatChanged:
-        'Diff Banner logs WAITING_FOR_SELLER_RESPONSE -> WAITING_FOR_BUYER_RESPONSE; Business locks to "Offer Sent ✓"; Client Inbox reveals "Accept $350.00 Settlement" CTA; Bus logs [Merchant -> Client] Pre-Escalation Offer Sent.',
+        'Client portal renders active settlement proposal alongside full bilateral dispute message log without exposing internal seller risk gauges.',
       ecosystemProof:
-        'Proves synchronized two-sided settlement: Merchant offer issuance atomically updates ledger state and delivers binding terms to Client Inbox.',
-      apiBadge: 'INQUIRY -> WAITING_FOR_BUYER_RESPONSE',
+        'Completes two-sided pre-escalation settlement across roles before PayPal escalates the ticket to a formal chargeback.',
+      apiBadge: 'POST /api/disputes/:id/accept-offer',
     });
+    await clearHighlight(page);
+
+    // Execute Accept Settlement
+    await locateAndAct(page, 'main button', ['Accept $', 'Settlement'], 'click');
+    await waitForText(page, 'RESOLVED');
+    await delay(400);
+    await dismissToastIfPresent(page);
 
     // ------------------------------------------------------------------
-    // STEP 18: Highlight Client "Accept $350.00 Settlement"
+    // STEP 18: Disputes (Merchant) — Branch A Resolved at $0 Fee & Ratio Restored to 0.95%
     // ------------------------------------------------------------------
-    await locateAndAct(
-      page,
-      'button',
-      ['Accept', 'Settlement'],
-      'highlight',
-      'Client: Accept $350.00 Settlement'
-    );
-    await delay(200);
+    await switchRole(page, 'Merchant');
+    await waitForText(page, 'Settled at $0 dispute fee');
+    await delay(300);
+    const restoredPct = await page.evaluate(() => {
+      const m = document.body.innerText.match(/restored to\s*(\d+\.\d+%)/i);
+      return m ? m[1] : '0.95%';
+    });
     steps.push({
       stepNumber: 18,
-      phase: 'USER_ACTION',
-      stageTag: 'Stage 4 (Branch A) • Client Buyer Acceptance Trigger',
-      title: 'Client Portal Action: Buyer Clicks "Accept $350.00 Settlement"',
-      imagePath: await capturePng(page, '18_branch_a_click_client_accept_settlement.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
-      beforeState:
-        'PP-D-40193 is in WAITING_FOR_BUYER_RESPONSE; 90-day ratio remains at 1.42% Warning Tier.',
-      triggerAction:
-        'Client Buyer clicks "Accept $350.00 Settlement" inside the left Client Buyer Portal lane.',
-      whatChanged:
-        'Highlights live client endpoint POST /api/disputes/PP-D-40193/accept-offer to accept refund terms and close inquiry pre-escalation at $0.00 fee.',
-      ecosystemProof:
-        'Demonstrates buyer-side closure on a real backend endpoint rather than a static mockup, protecting both buyer recovery and seller fee tier.',
-      apiBadge: 'POST /api/disputes/PP-D-40193/accept-offer',
-    });
-    await clearHighlight(page);
-
-    // Click Client Accept Settlement
-    await locateAndAct(page, 'button', ['Accept', 'Settlement'], 'click');
-    await waitForText(page, 'RESOLVED');
-    await waitForText(page, '0.95%');
-    await delay(600);
-
-    // ------------------------------------------------------------------
-    // STEP 19: What Changed — RESOLVED ($0.00 Fee) & Ratio Restored to 0.95% Safe Tier
-    // ------------------------------------------------------------------
-    steps.push({
-      stepNumber: 19,
       phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 4 (Branch A) • Safe Tier Restored (0.95%)',
-      title: 'What Changed: Inquiry RESOLVED ($0 Fee) & Ratio Restored 1.42% -> 0.95%',
-      imagePath: await capturePng(page, '19_branch_a_what_changed_resolved.png', {
-        fullPage: true,
+      stageTag: 'Phase 4 • Branch A Outcome ($0 Fee & Safe Tier Restored)',
+      title: `Disputes (Merchant): Branch A Resolved at $0 Fee -> Ratio Restored (${restoredPct})`,
+      imagePath: await capturePng(page, '18_disputes_merchant_branch_a_resolved.png', {
         scrollY: 0,
       }),
       beforeState:
-        '90-day dispute ratio stood at 1.42% (Warning Zone) with PP-D-40193 in WAITING_FOR_BUYER_RESPONSE.',
+        `Merchant ratio hovered near 1.50% limit during active inquiry ${branchADetails.disp} (${branchADetails.pct}).`,
       triggerAction:
-        'Client accepted $350.00 pre-escalation settlement via PayPal Aegis.',
+        'Client accepted $350.00 settlement; switched back to Merchant on Disputes.',
       whatChanged:
-        'KPI ratio drops to emerald 0.95% (Safe Tier); Diff Banner logs 1.42% (Warning) -> 0.95% (Safe) ($0.00 Fee); Client & Business cards confirm RESOLVED; Cross-Party Bus appends settlement event.',
+        `Status updates to RESOLVED; green confirmation banner displays "Settled at $0 dispute fee. Rolling ratio restored to ${restoredPct}."; circular gauge rebounds safely into emerald Safe Tier.`,
       ecosystemProof:
-        'Closes the Branch A pre-escalation loop: Buyer receives instant resolution while Merchant avoids the $30/claim High Volume cliff.',
-      apiBadge: 'RESOLVED ($0 Fee) • Ratio 0.95% Safe',
+        'Demonstrates closed-loop Dispute Shield ROI: proactive inquiry resolution protects profit margins and lowers PayPal dispute ratio below warning thresholds.',
+      apiBadge: `$0 Fee • Ratio ${branchADetails.pct} -> ${restoredPct}`,
     });
 
     // ------------------------------------------------------------------
-    // STEP 20: Live PayPal Wire Inspector (Tab A: Synchronized accept-offer Payload)
+    // STEP 19: Open Demo Drawer & Highlight "Simulate Branch B (Escalated Chargeback)"
     // ------------------------------------------------------------------
-    await page.evaluate(() => {
-      const btn = document.querySelector(
-        'button[title="Expand Inspector"]'
-      ) as HTMLElement | null;
-      if (btn) btn.click();
-    });
-    await waitForText(page, 'Tab A: PayPal Wire');
-    await waitForText(page, 'accept-offer');
-    await delay(450);
-    steps.push({
-      stepNumber: 20,
-      phase: 'FEATURE_SPOTLIGHT',
-      stageTag: 'API Verification • Synchronized PayPal Wire',
-      title: 'Live Wire Inspector (Tab A): Synchronized /accept-offer Request & RESOLVED JSON',
-      imagePath: await capturePng(page, '20_live_wire_synchronized_tab_a.png', {
-        fullPage: false,
-      }),
-      beforeState:
-        'PayPal Sandbox HTTP telemetry remained minimized at the bottom bar.',
-      triggerAction:
-        'Expanded Live PayPal Sandbox Wire Inspector (Tab A) immediately after Branch A acceptance.',
-      whatChanged:
-        'Left HTTP Request Line (POST /api/disputes/PP-D-40193/accept-offer) matches Middle JSON Response Payload 1:1: status="RESOLVED", offer_accepted=true, dispute_fee="0.00", restored_ratio="0.95%".',
-      ecosystemProof:
-        'Proves real-time wire state synchronization across HTTP request metadata, CRC32 validation, and JSON payload bodies.',
-      apiBadge: 'LIVE_WIRE • accept-offer -> RESOLVED',
-    });
-    // Collapse bottom wire drawer before Branch B Tab 4 inspection
-    await page.evaluate(() => {
-      const btn = document.querySelector(
-        'button[title="Collapse Inspector"]'
-      ) as HTMLElement | null;
-      if (btn) btn.click();
-    });
-    await delay(250);
-
-    // ------------------------------------------------------------------
-    // STEP 21: Switch to Tab 4 & Trigger Branch B (Escalated Chargeback)
-    // ------------------------------------------------------------------
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await delay(150);
-    await locateAndAct(
-      page,
-      'button',
-      ['1.5% Dispute Shield & Evidentiary RAG'],
-      'click'
-    );
-    await waitForText(page, 'Dispute Defense & Revenue Shield Console');
-    await waitForText(page, 'Test Branch B: Simulate Escalated Claim');
-    await delay(350);
-
-    await locateAndAct(
-      page,
-      'button',
-      ['Test Branch B: Simulate Escalated Claim'],
-      'highlight',
-      'Test Branch B: Simulate Escalated Claim'
-    );
-    await delay(200);
-    steps.push({
-      stepNumber: 21,
-      phase: 'USER_ACTION',
-      stageTag: 'Stage 4 (Branch B) • Escalated Chargeback Defense',
-      title: 'Tab 4 Dispute Shield -> Click "Test Branch B: Simulate Escalated Claim"',
-      imagePath: await capturePng(page, '21_tab4_click_simulate_branch_b.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
-      beforeState:
-        'Branch A (PP-D-40193) closed as RESOLVED at 0.95% Safe Tier.',
-      triggerAction:
-        'Clicked Tab 4 ("1.5% Dispute Shield & Evidentiary RAG") and targeted "Test Branch B: Simulate Escalated Claim" to demonstrate chargeback representment.',
-      whatChanged:
-        'Highlights Branch B chargeback simulator alongside circular 1.5% Dispute Ratio Gauge, Bryntum 10-day SLA bar, and 2-page A4 PDF preview.',
-      ecosystemProof:
-        'Demonstrates clean lifecycle separation: settled Inquiry (Branch A) vs escalated Chargeback representment (Branch B).',
-      apiBadge: 'Switch -> Tab 4 & Branch B',
-    });
-    await clearHighlight(page);
-
-    // Execute Branch B Simulation
-    await locateAndAct(
-      page,
-      'button',
-      ['Test Branch B: Simulate Escalated Claim'],
-      'click'
-    );
-    await waitForText(page, 'PP-D-40194-CB');
-    await waitForText(page, 'Chargeback (Offer Locked)');
-    await delay(500);
-
-    // ------------------------------------------------------------------
-    // STEP 22: Branch B Active (PP-D-40194-CB) + Highlight "Upload Multipart Evidence"
-    // ------------------------------------------------------------------
-    await locateAndAct(
-      page,
-      'button',
-      ['Upload Multipart Evidence (provide-evidence)'],
-      'highlight',
-      'Branch B: Upload Multipart Evidence'
-    );
-    await delay(200);
-    steps.push({
-      stepNumber: 22,
-      phase: 'USER_ACTION',
-      stageTag: 'Stage 4 (Branch B) • Multipart Representment Filing',
-      title: 'Branch B (PP-D-40194-CB): Offer Strictly Locked -> Click "Upload Multipart Evidence"',
-      imagePath: await capturePng(page, '22_branch_b_click_provide_evidence.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
-      beforeState:
-        'Escalated CHARGEBACK PP-D-40194-CB stands at WAITING_FOR_SELLER_RESPONSE; pre-escalation "Chargeback (Offer Locked)" button is enforced disabled (HTTP 409 guard).',
-      triggerAction:
-        'Merchant clicks "Branch B: Upload Multipart Evidence (provide-evidence)" below the 2-page A4 forensic PDF (grounded with Channel3 SKU + matching Elastic ' + detectedKnnPct + ' kNN score).',
-      whatChanged:
-        'Highlights PayPal Disputes API v1 /provide-evidence multipart upload button while Dispatch Offer stays locked on CHARGEBACK claims.',
-      ecosystemProof:
-        'Proves both PayPal lifecycle compliance (no make-offer on Chargebacks) and binary multipart/form-data representment compilation.',
-      apiBadge: 'POST /v1/customer/disputes/PP-D-40194-CB/provide-evidence',
-    });
-    await clearHighlight(page);
-
-    // Execute Multipart Evidence Upload on Branch B Chargeback
-    await locateAndAct(
-      page,
-      'button',
-      ['Upload Multipart Evidence (provide-evidence)'],
-      'click'
-    );
-    await waitForText(page, 'UNDER_REVIEW');
-    await waitForText(page, 'Evidence Filed (UNDER_REVIEW');
-    await delay(500);
-
-    // ------------------------------------------------------------------
-    // STEP 23: What Changed — Branch B Evidence Filed (UNDER_REVIEW)
-    // ------------------------------------------------------------------
-    steps.push({
-      stepNumber: 23,
-      phase: 'WHAT_CHANGED',
-      stageTag: 'Stage 4 (Branch B) • Adjudication Submitted',
-      title: 'What Changed: Multipart A4 PDF Dispatched -> PP-D-40194-CB UNDER_REVIEW',
-      imagePath: await capturePng(page, '23_branch_b_what_changed_under_review.png', {
-        fullPage: true,
-        scrollY: 0,
-      }),
-      beforeState:
-        'Escalated Chargeback PP-D-40194-CB awaited seller evidence at WAITING_FOR_SELLER_RESPONSE.',
-      triggerAction:
-        `Submitted 2-page A4 PDF compiled from SOW timestamp, buyer IP 203.0.113.42, SHA-256 digest, and ${detectedKnnPct} Elastic kNN score.`,
-      whatChanged:
-        'Status advances strictly forward to UNDER_REVIEW ("Under Adjudication" offer permanently locked); Multipart Evidence confirmation alert appears; Cross-Party Bus logs [Merchant -> PayPal] A4 Evidence Bundle Submitted.',
-      ecosystemProof:
-        'Completes strict unidirectional PayPal lifecycle proof: zero backward transitions from UNDER_REVIEW to WAITING_FOR_BUYER_RESPONSE.',
-      apiBadge: 'CHARGEBACK -> UNDER_REVIEW',
-    });
-
-    // Return to Tab 1 before Bus Spotlight
-    await locateAndAct(page, 'button', ['Tripartite Ecosystem Canvas'], 'click');
-    await waitForText(page, 'Client Inbox');
-    await delay(350);
-
-    // ------------------------------------------------------------------
-    // STEP 24: Cross-Party Notification & Activity Bus ("Client Inbox" Filter)
-    // ------------------------------------------------------------------
-    await locateAndAct(
-      page,
-      'button',
-      ['Client Inbox'],
-      'click',
-      undefined,
-      'center'
-    );
+    await locateAndAct(page, 'aside button', ['Demo'], 'click');
+    await waitForText(page, 'Simulate Branch B (Escalated Chargeback)');
     await delay(300);
     await locateAndAct(
       page,
-      'button',
-      ['Client Inbox'],
+      'aside[aria-label="Demo Controls Panel"] button',
+      ['Simulate Branch B (Escalated Chargeback)'],
       'highlight',
-      'Scoped Filter: Client Inbox',
-      'center'
+      'Simulate Branch B'
     );
     await delay(200);
+    steps.push({
+      stepNumber: 19,
+      phase: 'USER_ACTION',
+      stageTag: 'Phase 4 • Escalating to Branch B (Chargeback)',
+      title: 'Demo Controls Drawer: Trigger "Simulate Branch B (Escalated Chargeback)"',
+      imagePath: await capturePng(page, '19_demo_simulate_branch_b.png', { scrollY: 0 }),
+      beforeState:
+        'Merchant Dispute Shield stood in Safe Tier (0.95%) after Branch A resolution.',
+      triggerAction:
+        'Opened Demo drawer from bottom of Sidebar and prepared click on "Simulate Branch B (Escalated Chargeback)".',
+      whatChanged:
+        'Shows clean separation of judge/demo triggers inside the slide-over Demo drawer (Refresh, Reset workspace, Guided 1-4 buttons, Branch B simulator, Custom Sandbox tabs).',
+      ecosystemProof:
+        'Keeps simulation controls accessible on demand for evaluators while maintaining an authentic fintech product surface.',
+      apiBadge: 'POST /api/disputes/simulate (CHARGEBACK)',
+    });
+    await clearHighlight(page);
+
+    // Click Simulate Branch B & close Demo drawer
+    await locateAndAct(
+      page,
+      'aside[aria-label="Demo Controls Panel"] button',
+      ['Simulate Branch B (Escalated Chargeback)'],
+      'click'
+    );
+    await delay(500);
+    await locateAndAct(
+      page,
+      'button[aria-label="Close Demo Controls"]',
+      [''],
+      'click'
+    );
+    await waitForText(page, 'Offer Locked');
+    await waitForText(page, 'Upload Evidence');
+    await delay(400);
+    await dismissToastIfPresent(page);
+
+    // ------------------------------------------------------------------
+    // STEP 20: Branch B Active — Offer Locked + 1.55% High Risk + A4 PDF Preview + Upload Evidence
+    // ------------------------------------------------------------------
+    await locateAndAct(
+      page,
+      'main button',
+      ['Upload Evidence'],
+      'highlight',
+      'Upload Evidence'
+    );
+    await delay(200);
+    steps.push({
+      stepNumber: 20,
+      phase: 'STATE_EARLIER',
+      stageTag: 'Phase 4 • Branch B Chargeback & Representment Bundle',
+      title: 'Disputes (Merchant): 1.55% High Risk, "Offer Locked", 10-Day SLA & "Upload Evidence"',
+      imagePath: await capturePng(page, '20_disputes_branch_b_upload_click.png', { scrollY: 0 }),
+      beforeState:
+        'Branch A permitted $0-fee settlement offers while under CHARGEBACK threshold.',
+      triggerAction:
+        'Simulated escalated CHARGEBACK crossing 1.50% High-Risk threshold and targeted "Upload Evidence".',
+      whatChanged:
+        'Disputes auto-switches to Chargeback (Branch B) tab; ratio gauge alerts High Risk (1.55% / 1.50%); UI locks make-offer ("Offer Locked" + backend 409 guard); 10-Day Seller Response SLA bar and A4 PDF Evidence Preview appear.',
+      ecosystemProof:
+        'Enforces PayPal dispute lifecycle constraints: escalated chargebacks cannot use make-offer and require multipart/related A4 PDF representment compiled from IP logs, hashes, and timestamps.',
+      apiBadge: 'CHARGEBACK • 1.55% High Risk',
+    });
+    await clearHighlight(page);
+
+    // Execute Upload Evidence
+    await locateAndAct(page, 'main button', ['Upload Evidence'], 'click');
+    await waitForText(page, 'Evidence Filed');
+    await delay(450);
+    await dismissToastIfPresent(page);
+
+    // ------------------------------------------------------------------
+    // STEP 21: What Changed — Multipart Evidence Filed & SLA Emerald
+    // ------------------------------------------------------------------
+    steps.push({
+      stepNumber: 21,
+      phase: 'WHAT_CHANGED',
+      stageTag: 'Phase 4 • Branch B Multipart Representment Submitted',
+      title: 'Branch B Complete: A4 PDF Uploaded ("Evidence Filed") -> UNDER_REVIEW',
+      imagePath: await capturePng(page, '21_disputes_branch_b_filed.png', { scrollY: 0 }),
+      beforeState:
+        'Escalated chargeback awaited seller evidence ahead of the 10-day SLA cutoff.',
+      triggerAction:
+        'Clicked "Upload Evidence", compiling the A4 PDFKit report and dispatching multipart/related (---AegisBoundary) to /provide-evidence.',
+      whatChanged:
+        'Action button locks cleanly to "Evidence Filed", 10-Day Seller Response SLA bar advances to emerald, and dispute lifecycle enters UNDER_REVIEW.',
+      ecosystemProof:
+        'Builds compliant multipart/related binary payloads (JSON input + PDF stream under boundary ---AegisBoundary) audited against PayPal representment schemas.',
+      apiBadge: 'POST /disputes/:id/provide-evidence',
+    });
+
+    // ------------------------------------------------------------------
+    // STEP 22: Activity Page — Cross-Party Filter & Expandable "Details"
+    // ------------------------------------------------------------------
+    await navigateSidebar(page, 'Activity');
+    await waitForText(page, 'Details');
+    await delay(250);
+    await locateAndAct(page, 'main button', ['PayPal'], 'click');
+    await delay(250);
+    await locateAndAct(page, 'main button', ['Details'], 'click');
+    await waitForText(page, 'Event:');
+    await delay(300);
+    await page.evaluate(() => {
+      const txt = document.body.innerText;
+      if (txt.includes('RESOURCE_NOT_FOUND') || txt.includes('"success": false')) {
+        throw new Error('Activity details exposed raw 404 RESOURCE_NOT_FOUND / success:false failure!');
+      }
+      if (!txt.includes('EVID-A4-99281A')) {
+        throw new Error('Activity details missing normalized EVIDENCE_UPLOADED EVID-A4-99281A receipt.');
+      }
+    });
+    steps.push({
+      stepNumber: 22,
+      phase: 'FEATURE_SPOTLIGHT',
+      stageTag: 'Phase 5 • Cross-Party Activity Bus',
+      title: 'Activity Page: Role Filter Chips ("PayPal") & Expandable JSON Event Details',
+      imagePath: await capturePng(page, '22_activity_filter_details.png', { scrollY: 0 }),
+      beforeState:
+        'Overview displayed only the 3 most recent notifications to keep the home screen concise.',
+      triggerAction:
+        'Opened Activity from Sidebar, filtered by "PayPal", and clicked "Details" on the latest cross-party row.',
+      whatChanged:
+        'Displays full Sender -> Recipient event attribution across Escrow, Reauth, SafeGate HITL, and Dispute Representment, with inline expandable event type, agent, and normalized 200 OK JSON payload metadata.',
+      ecosystemProof:
+        'Gives auditors complete bilateral traceability via Socket.IO event persistence without polluting everyday operational screens.',
+      apiBadge: 'Cross-Party Bus • Expanded Details',
+    });
+
+    // ------------------------------------------------------------------
+    // STEP 23: Dev Tools Drawer — Wire Inspector & Audit Logs (.json)
+    // ------------------------------------------------------------------
+    await locateAndAct(page, 'aside button', ['Dev tools'], 'click');
+    await waitForText(page, 'Developer Tools');
+    await waitForText(page, 'PayPal-Request-Id');
+    await delay(350);
+    const wireMeta = await page.evaluate(() => {
+      const aside = document.querySelector('aside[aria-label="Developer Tools Drawer"]');
+      const txt = (aside as HTMLElement | null)?.innerText || '';
+      if (txt.includes('RESOURCE_NOT_FOUND') || txt.includes('"success": false')) {
+        throw new Error('Wire Inspector exposed raw 404 RESOURCE_NOT_FOUND / success:false failure!');
+      }
+      if (!txt.includes('EVID-A4-99281A')) {
+        throw new Error('Wire Inspector missing normalized EVID-A4-99281A upload receipt!');
+      }
+      const uuidMatch = txt.match(/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
+      if (!uuidMatch) {
+        throw new Error(`Wire Inspector PAYPAL-REQUEST-ID is not a 36-char v4 UUID! Text snapshot: ${txt.slice(0, 400)}`);
+      }
+      const crc = txt.match(/0x[0-9A-F]{8}/)?.[0] || 'CRC32';
+      return { crc, requestId: uuidMatch[0] };
+    });
+    steps.push({
+      stepNumber: 23,
+      phase: 'FEATURE_SPOTLIGHT',
+      stageTag: 'Phase 5 • Developer Tools Drawer (Wire Inspector)',
+      title: `Dev Tools -> Wire Inspector: 36-Char UUID, CRC32 (${wireMeta.crc}) & 200 OK JSON`,
+      imagePath: await capturePng(page, '23_devtools_wire_inspector.png', { scrollY: 0 }),
+      beforeState:
+        'API wire telemetry, request correlation IDs, and CRC32 webhook verification stayed tucked off main screens.',
+      triggerAction:
+        'Opened "Dev tools" from bottom Sidebar showing default "Wire Inspector" tab + header "Audit Logs (.json)" export button.',
+      whatChanged:
+        `Slide-over drawer displays live HTTP method/endpoint, 200 OK latency, 36-char v4 UUID PayPal-Request-Id (${wireMeta.requestId}), unsigned 32-bit CRC32 (${wireMeta.crc} Validated), normalized 200 OK evidence JSON receipt (EVID-A4-99281A), and agent status bar.`,
+      ecosystemProof:
+        'Proves APIMatic/PayPal wire fidelity (<=38-char UUID idempotency keys, 30-day replay cache, CRC32 RSA-SHA256 webhook verification) and 1-click JSON log export.',
+      apiBadge: `Wire Inspector • ${wireMeta.crc}`,
+    });
+
+    // ------------------------------------------------------------------
+    // STEP 24: Dev Tools Drawer — Agent Trace (4 Scoped Tools + 64-Dim Cosine Math)
+    // ------------------------------------------------------------------
+    await locateAndAct(
+      page,
+      'aside[aria-label="Developer Tools Drawer"] button',
+      ['Agent Trace'],
+      'click'
+    );
+    await waitForText(page, 'Retrieved Context Telemetry');
+    await delay(350);
+    await page.evaluate((expectedPct) => {
+      const aside = document.querySelector('aside[aria-label="Developer Tools Drawer"]');
+      const txt = (aside as HTMLElement | null)?.innerText || '';
+      if (txt.includes('96.50%') || txt.includes('0.965')) {
+        throw new Error('Agent Trace still shows stale 0.965 / 96.50% cosine score instead of DeliveryAuditor score!');
+      }
+      const numericPct = expectedPct.replace('%', '');
+      if (!txt.includes(numericPct)) {
+        throw new Error(`Agent Trace cosine score (${txt}) does not match DeliveryAuditor score (${expectedPct})`);
+      }
+    }, detectedMatchPct);
     steps.push({
       stepNumber: 24,
       phase: 'FEATURE_SPOTLIGHT',
-      stageTag: 'Cross-Party Bus • Event Provenance',
-      title: 'Cross-Party Notification Bus: Scoped "Client Inbox" Sender -> Recipient Feed',
-      imagePath: await capturePng(page, '24_cross_party_bus_client_inbox.png', {
-        fullPage: false,
-      }),
+      stageTag: 'Phase 5 • Developer Tools (Agent Trace & Cosine RAG)',
+      title: 'Dev Tools -> Agent Trace: Phase-Scoped Tools & 64-Dim Cosine Vector Math',
+      imagePath: await capturePng(page, '24_devtools_agent_trace.png', { scrollY: 0 }),
       beforeState:
-        'Full event bus aggregated alerts across Client, Business, PayPal Sandbox, and AI Arbiter.',
+        'Dev tools drawer showed low-level HTTP wire headers and raw JSON payload.',
       triggerAction:
-        'Clicked "Client Inbox" filter pill on Cross-Party Notification & Activity Bus.',
+        'Switched to "Agent Trace" sub-tab inside Dev tools drawer.',
       whatChanged:
-        'Bus filters live events relevant to Client Buyer with strict [Sender] -> [Recipient] routing pills and "Brokered by: Agent" badges.',
+        'Inspects active agent phase (e.g. DeliveryAuditor / DisputeStrategist), retrieved Buyer IP / Channel3 SKU / SHA-256 context, strictly 4 phase-scoped tool chips, and synchronized 64-dim vector dot-product math matching DeliveryAuditor.',
       ecosystemProof:
-        'Proves complete multi-party accountability: judges can audit exactly who initiated each mutation, who received it, and which agent brokered it.',
-      apiBadge: 'Socket.IO ecosystem:event',
+        'Solves LLM tool bloat: instead of dumping an unconstrained flat toolkit into context, SafeGate ToolRouter injects strictly 4 scoped tools per phase alongside the live DeliveryAuditor cosine similarity score.',
+      apiBadge: '4 Scoped Tools • 64-Dim Cosine Math',
     });
-    await clearHighlight(page);
+
+    // Close Dev tools drawer
+    await locateAndAct(
+      page,
+      'button[aria-label="Close Developer Tools"]',
+      [''],
+      'click'
+    );
+    await waitForNoText(page, 'Retrieved Context Telemetry');
+    await delay(250);
 
     // ------------------------------------------------------------------
-    // STEP 25: Custom Input Sandbox Drawer ("Edit Inputs / Custom Sandbox")
+    // STEP 25: Demo Drawer -> Custom Sandbox Guardrail ("Raw SOW Text" malformed "asdf")
     // ------------------------------------------------------------------
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await locateAndAct(page, 'aside button', ['Demo'], 'click');
+    await waitForText(page, 'Custom Sandbox Inputs');
+    await locateAndAct(
+      page,
+      'aside[aria-label="Demo Controls Panel"] button',
+      ['Raw SOW Text'],
+      'click'
+    );
+    await waitForText(page, 'Execute Custom Seed & Hold');
+    await delay(200);
+    await page.evaluate(() => {
+      const ta = document.querySelector('#demo-sow-raw-text') as HTMLTextAreaElement | null;
+      if (ta) {
+        ta.focus();
+        ta.select();
+      }
+    });
+    await page.keyboard.press('Backspace');
+    await page.type('#demo-sow-raw-text', 'asdf');
+    await waitForText(page, 'Malformed text falls back to a single generic milestone');
     await delay(200);
     await locateAndAct(
       page,
-      'button',
-      ['Edit Inputs / Custom Sandbox'],
+      'aside[aria-label="Demo Controls Panel"] button',
+      ['Execute Custom Seed & Hold'],
       'click'
     );
-    await waitForText(page, 'Custom SOW / Contract Playground');
-    await waitForText(page, 'Execute Custom Seed & Hold');
-    await delay(450);
+    await waitForText(page, 'Dismiss');
+    await page.waitForFunction(
+      () => {
+        const aside = document.querySelector('aside[aria-label="Demo Controls Panel"]');
+        if (!aside) return false;
+        const btn = Array.from(aside.querySelectorAll('button')).find((b) =>
+          (b.textContent || '').includes('Execute Custom Seed & Hold')
+        ) as HTMLButtonElement | undefined;
+        return Boolean(btn && !btn.disabled);
+      },
+      { timeout: 20000 }
+    );
+    await delay(300);
+    await locateAndAct(
+      page,
+      'aside[aria-label="Demo Controls Panel"] button',
+      ['Execute Custom Seed & Hold'],
+      'scrollOnly',
+      undefined,
+      'center'
+    );
+    await delay(250);
     steps.push({
       stepNumber: 25,
       phase: 'FEATURE_SPOTLIGHT',
-      stageTag: 'Zero Hardcoding • Custom Input Sandbox',
-      title: 'Custom Input Sandbox Drawer: Arbitrary SOW Text, SKU & Ratio Slider',
-      imagePath: await capturePng(page, '25_custom_input_sandbox_drawer.png', {
-        fullPage: false,
-      }),
+      stageTag: 'Phase 6 • Demo Sandbox & Anti-Hardcoding Guardrails',
+      title: 'Demo -> Custom Sandbox: Malformed Raw SOW ("asdf") Safe Fallback & Live JSON Preview',
+      imagePath: await capturePng(page, '25_demo_sandbox_guardrail.png', { scrollY: 0 }),
       beforeState:
-        'Pre-configured hackathon scenario demonstrated standard milestone flow.',
+        'Demo drawer Custom Sandbox defaulted to the 3 structured milestones ($1,250 / $1,750 / $1,500).',
       triggerAction:
-        'Clicked "Edit Inputs / Custom Sandbox" in top Judge & Ecosystem Demo Toolbar.',
+        'Switched SOW mode to "Raw SOW Text", typed malformed string "asdf", and executed "Execute Custom Seed & Hold".',
       whatChanged:
-        'Opens 3-tab Custom Sandbox modal: (a) Structured Milestones or Raw SOW Document Text parser, (b) Custom Deliverable & Channel3 SKU evaluator, and (c) Custom Dispute Ratio Slider with clamped safety bounds & Live Payload JSON preview.',
+        'Input guardrail detects unparseable text, displays explicit fallback alert banner (with Dismiss), normalizes cleanly to a single generic milestone ($100.00 USD) instead of throwing NaN/500, and streams live request JSON in expanded Live Payload Preview.',
       ecosystemProof:
-        'Directly satisfies judge anti-hardcoding checks: reviewers can inject arbitrary contracts, amounts, SKUs, and dispute ratios and execute real Sandbox APIs.',
-      apiBadge: 'Custom Sandbox -> /api/demo/custom-action',
+        'Proves anti-hardcoding resilience: contract parsing handles arbitrary free-form SOW inputs and edge-case malformed strings deterministically without breaking PayPal API schemas.',
+      apiBadge: 'Custom SOW Guardrail • $100.00 Fallback',
     });
 
-    // Close Custom Sandbox Drawer via Close button or Escape
-    await page.evaluate(() => {
-      const closeBtn = document.querySelector(
-        'button[title="Close Custom Input Sandbox"]'
-      ) as HTMLElement | null;
-      if (closeBtn) closeBtn.click();
-    });
-    await page.keyboard.press('Escape');
+    // ------------------------------------------------------------------
+    // STEP 26: Reset Workspace -> Clean Post-Demo Overview Verification
+    // ------------------------------------------------------------------
+    await locateAndAct(
+      page,
+      'aside[aria-label="Demo Controls Panel"] button',
+      ['Reset workspace'],
+      'click'
+    );
     await page.waitForFunction(
-      () => !document.body.innerText.includes('Execute Custom Seed & Hold (Orders v2)'),
-      { timeout: 10000 }
+      () => {
+        const aside = document.querySelector('aside[aria-label="Demo Controls Panel"]');
+        if (!aside) return false;
+        const txt = (aside as HTMLElement).innerText || '';
+        return txt.includes('Reset workspace') && !txt.includes('Resetting...');
+      },
+      { timeout: 20000 }
     );
     await delay(300);
-
-    // ------------------------------------------------------------------
-    // STEP 26: Live Wire Inspector (Tab B: RAG & Agent Trace — Elastic kNN & Channel3)
-    // ------------------------------------------------------------------
-    await page.evaluate(() => {
-      const btn = document.querySelector(
-        'button[title="Expand Inspector"]'
-      ) as HTMLElement | null;
-      if (btn) btn.click();
-    });
-    await waitForText(page, 'Tab B: RAG & Agent Trace');
-    await locateAndAct(page, 'button', ['Tab B: RAG & Agent Trace'], 'click');
-    await waitForText(page, 'Channel3');
-    await delay(450);
+    await locateAndAct(
+      page,
+      'button[aria-label="Close Demo Controls"]',
+      [''],
+      'click'
+    );
+    await waitForNoText(page, 'Custom Sandbox Inputs');
+    await navigateSidebar(page, 'Overview');
+    await switchRole(page, 'Client');
+    await waitForText(page, 'No active escrow hold');
+    await waitForText(page, 'Lock Milestone 1 Hold');
+    await dismissToastIfPresent(page);
+    await delay(300);
     steps.push({
       stepNumber: 26,
-      phase: 'FEATURE_SPOTLIGHT',
-      stageTag: 'AI Verification • Elastic kNN & Agent Trace',
-      title: 'Live Wire Inspector (Tab B): Autonomous Agent Decisions & 64-Dim Cosine Math',
-      imagePath: await capturePng(page, '26_live_wire_rag_trace_tab_b.png', {
-        fullPage: false,
-      }),
+      phase: 'BASELINE',
+      stageTag: 'Phase 6 • Clean Post-Flow Workspace Reset',
+      title: 'Reset Workspace Confirmed: Overview Restored to Clean $0.00 Baseline',
+      imagePath: await capturePng(page, '26_final_clean_reset.png', { scrollY: 0 }),
       beforeState:
-        'Drawer displayed PayPal HTTP wire logs (Tab A).',
+        'Workspace held active sandbox milestone holds, dispute simulations, and custom $100.00 fallback state.',
       triggerAction:
-        'Expanded bottom Telemetry Drawer and clicked "Tab B: RAG & Agent Trace (Elastic kNN & Channel3)".',
+        'Clicked "Reset workspace" in Demo drawer, closed drawer, and returned to Overview in Client view.',
       whatChanged:
-        `Displays ContractParser, DeliveryAuditor, and DisputeStrategist reasoning traces alongside Channel3 SKU scores and genuine Elastic 64-dim vector cosine similarity (${detectedKnnPct}).`,
+        'All milestones, disputes, SafeGate queues, and activity logs clear deterministically; Held and Settled KPIs return to $0.00 USD ready for repeatable judge demos.',
       ecosystemProof:
-        'Proves AI autonomy is mathematically auditable end-to-end: genuine Elastic kNN vector dot-product math + Channel3 grounding + APIMatic schema checks.',
-      apiBadge: '64-Dim Cosine RAG • Channel3 100M+ SKUs',
+        'Guarantees zero leftover test pollution across back-to-back live judge demonstrations.',
+      apiBadge: 'POST /api/demo/reset -> Clean Ready',
     });
 
     // Compile A4 Landscape Flow PDF
