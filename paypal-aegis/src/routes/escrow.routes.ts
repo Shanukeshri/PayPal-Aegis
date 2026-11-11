@@ -47,6 +47,17 @@ router.post('/milestones/:id/hold', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/escrow/milestones/:id/authorize-approved — Finalize live Sandbox auth after buyer checkout approval
+router.post('/milestones/:id/authorize-approved', async (req: Request, res: Response) => {
+  try {
+    const result = await holdManager.completeApprovedAuthorization(req.params.id);
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    logger.error('Failed to complete approved milestone authorization', { err: err.message });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/escrow/milestones/:id/reauthorize — Execute Day-3 Reauthorization
 router.post('/milestones/:id/reauthorize', async (req: Request, res: Response) => {
   try {

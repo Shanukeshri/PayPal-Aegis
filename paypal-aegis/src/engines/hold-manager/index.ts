@@ -34,10 +34,12 @@ export interface MilestoneHoldResult {
   milestoneId: string;
   orderId: string;
   authorizationId: string;
+  approvalUrl?: string;
   status: MilestoneStatus;
   honorPeriodExpiresAt: Date;
   hardExpirationAt: Date;
   simulated: boolean;
+  orderSimulated?: boolean;
 }
 
 export interface ReauthorizationResult {
@@ -114,10 +116,17 @@ export async function createMilestoneHold(
   );
 
   const orderId = orderRes.data.id;
+  const approvalUrl = safeGate.getOrderApprovalUrl(orderRes.data);
 
-  // Step 2: In sandbox / simulated flows, immediately authorize the created order
-  const authRes = await safeGate.authorizeOrder(orderId);
+  // Step 2: Authorize the created order (live if already approved / card-enabled, else SafeGate fallback preserving orderId & approve URL)
+  const authRes = await safeGate.authorizeOrder(orderId, {
+    knownOrder: orderRes.data,
+    amount: milestone.amount,
+  });
   const authData = authRes.data;
+  const nestedAuth = safeGate.extractAuthorizationFromOrder(authData);
+  const initialAuthId = nestedAuth?.id || authData.id;
+  const initialAuthStatus = nestedAuth?.status || authData.status;
 
   const now = new Date();
   // 3-day honor period (72 hours)
@@ -126,17 +135,19 @@ export async function createMilestoneHold(
   const hardExpirationAt = new Date(now.getTime() + 29 * 24 * 60 * 60 * 1000);
 
   const initialAuthRecord: AuthorizationRecord = {
-    authorizationId: authData.id,
+    authorizationId: initialAuthId,
     requestId: uuidv4(),
     timestamp: now,
     type: 'INITIAL',
-    status: authData.status,
+    status: initialAuthStatus,
   };
 
   // Update milestone record
   milestone.orderId = orderId;
-  milestone.activeAuthorizationId = authData.id;
-  milestone.originalAuthorizationId = authData.id;
+  milestone.approvalUrl = approvalUrl;
+  milestone.authorizationSimulated = authRes.simulated;
+  milestone.activeAuthorizationId = initialAuthId;
+  milestone.originalAuthorizationId = initialAuthId;
   milestone.authorizationHistory = [initialAuthRecord];
   milestone.honorPeriodExpiresAt = honorPeriodExpiresAt;
   milestone.hardExpirationAt = hardExpirationAt;
@@ -147,7 +158,10 @@ export async function createMilestoneHold(
   store.addAuditEntry('MILESTONE_HOLD_CREATED', {
     milestoneId,
     orderId,
-    authorizationId: authData.id,
+    authorizationId: initialAuthId,
+    approvalUrl,
+    orderSimulated: orderRes.simulated,
+    authorizationSimulated: authRes.simulated,
     amount: milestone.amount,
     honorPeriodExpiresAt,
   });
@@ -159,18 +173,88 @@ export async function createMilestoneHold(
 
   notifyScheduleSync('HOLD_LOCKED', milestone, {
     orderId,
-    authorizationId: authData.id,
+    authorizationId: initialAuthId,
+    approvalUrl,
     honorPeriodExpiresAt,
   });
 
   return {
     milestoneId,
     orderId,
-    authorizationId: authData.id,
+    authorizationId: initialAuthId,
+    approvalUrl,
     status: milestone.status,
     honorPeriodExpiresAt,
     hardExpirationAt,
     simulated: authRes.simulated,
+    orderSimulated: orderRes.simulated,
+  };
+}
+
+/**
+ * Promotes a Sandbox CREATED order to a live PayPal Authorization once the payer
+ * completes checkout at milestone.approvalUrl.
+ */
+export async function completeApprovedAuthorization(milestoneId: string): Promise<{
+  milestoneId: string;
+  orderId: string;
+  orderStatus: string;
+  awaitingBuyerApproval: boolean;
+  approvalUrl?: string;
+  authorizationId?: string;
+  simulated: boolean;
+}> {
+  const milestone = store.getMilestone(milestoneId);
+  if (!milestone || !milestone.orderId) {
+    throw new Error(`Milestone ${milestoneId} does not have a PayPal orderId`);
+  }
+
+  const orderCheck = await safeGate.getOrder(milestone.orderId);
+  const approvalUrl = safeGate.getOrderApprovalUrl(orderCheck.data) || milestone.approvalUrl;
+  if (orderCheck.data.status !== 'APPROVED' && orderCheck.data.status !== 'COMPLETED') {
+    return {
+      milestoneId,
+      orderId: milestone.orderId,
+      orderStatus: orderCheck.data.status,
+      awaitingBuyerApproval: true,
+      approvalUrl,
+      simulated: orderCheck.simulated,
+    };
+  }
+
+  const liveAuth = await safeGate.authorizeOrder(milestone.orderId, {
+    knownOrder: orderCheck.data,
+    amount: milestone.amount,
+    forceLiveAuthorize: true,
+  });
+  const nestedAuth = safeGate.extractAuthorizationFromOrder(liveAuth.data);
+  const liveAuthId = nestedAuth?.id || liveAuth.data.id;
+  const now = new Date();
+
+  milestone.authorizationSimulated = liveAuth.simulated;
+  milestone.activeAuthorizationId = liveAuthId;
+  if (!milestone.originalAuthorizationId || milestone.originalAuthorizationId === milestone.orderId) {
+    milestone.originalAuthorizationId = liveAuthId;
+  }
+  milestone.authorizationHistory.push({
+    authorizationId: liveAuthId,
+    requestId: uuidv4(),
+    timestamp: now,
+    type: 'INITIAL',
+    status: nestedAuth?.status || liveAuth.data.status,
+  });
+  milestone.status = 'AUTHORIZED';
+  milestone.updatedAt = now;
+  store.setMilestone(milestone);
+
+  return {
+    milestoneId,
+    orderId: milestone.orderId,
+    orderStatus: liveAuth.data.status,
+    awaitingBuyerApproval: false,
+    approvalUrl,
+    authorizationId: liveAuthId,
+    simulated: liveAuth.simulated,
   };
 }
 
@@ -483,6 +567,7 @@ export async function fastForwardDay3Reauthorization(
 
 export const holdManager = {
   createMilestoneHold,
+  completeApprovedAuthorization,
   scheduleDurableDay3Timer,
   executeReauthorization,
   captureMilestone,

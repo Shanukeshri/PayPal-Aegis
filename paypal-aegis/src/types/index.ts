@@ -125,6 +125,8 @@ export interface Milestone {
   amount: PayPalAmount;
   status: MilestoneStatus;
   orderId?: string;
+  approvalUrl?: string;
+  authorizationSimulated?: boolean;
   activeAuthorizationId?: string;
   originalAuthorizationId?: string;
   authorizationHistory: AuthorizationRecord[];
