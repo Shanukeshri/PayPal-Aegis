@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CommandLineIcon,
   DocumentTextIcon,
@@ -54,6 +54,17 @@ export const CustomInputSandboxDrawer: React.FC<CustomInputSandboxDrawerProps> =
   const [activeTab, setActiveTab] = useState<'sow' | 'deliverable' | 'dispute'>('sow');
   const [isJsonExpanded, setIsJsonExpanded] = useState(true);
   const [copiedJson, setCopiedJson] = useState(false);
+
+  // WCAG Compliance: Escape key handler to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Tab 1: Custom SOW State
   const [sowMode, setSowMode] = useState<'structured' | 'raw'>('structured');
@@ -330,9 +341,16 @@ export const CustomInputSandboxDrawer: React.FC<CustomInputSandboxDrawerProps> =
   if (!isOpen) return null;
 
   return (
-    <div className="bg-white border-b border-[#E5E0D8] shadow-md transition-all">
-      <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6">
-        {/* Drawer Header */}
+    <div
+      className="fixed inset-0 z-50 overflow-hidden bg-[#1C1917]/50 backdrop-blur-sm flex justify-end"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full max-w-4xl h-full shadow-2xl p-6 overflow-y-auto border-l border-[#E5E0D8] flex flex-col justify-between"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-full">
+          {/* Drawer Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#E5E0D8]">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-lg bg-[#0070BA]/10 text-[#0070BA] flex items-center justify-center border border-[#0070BA]/20">
@@ -872,6 +890,7 @@ export const CustomInputSandboxDrawer: React.FC<CustomInputSandboxDrawerProps> =
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

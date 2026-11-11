@@ -137,6 +137,7 @@ export interface Milestone {
   dependencies: string[];
   deliverables: Deliverable[];
   evidenceDocuments: EvidenceDocument[];
+  clientApprovedAt?: Date | string;
 }
 
 export type MilestoneStatus =
@@ -178,6 +179,13 @@ export interface VerificationResult {
   channel3SkuMatch?: string;
   elasticKnnScore?: number;
   isStockPhoto?: boolean;
+  featureVector?: number[];
+  cosineSimilarityMath?: {
+    dotProduct: number;
+    normA: number;
+    normB: number;
+    similarity: number;
+  };
   verifiedAt: Date;
 }
 
@@ -347,5 +355,55 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
     totalItems: number;
     totalPages: number;
   };
+}
+
+// ============================================
+// Tripartite Ecosystem & Diff Types
+// ============================================
+
+export type EcosystemActor = 'CLIENT' | 'BUSINESS' | 'PAYPAL_ENGINE';
+
+export type EcosystemEventType =
+  | 'HOLD_CREATED'
+  | 'REAUTH_MUTATED'
+  | 'DELIVERABLE_VERIFIED'
+  | 'SAFEGATE_INTERCEPT'
+  | 'CAPTURE_SETTLED'
+  | 'DISPUTE_OPENED'
+  | 'OFFER_DISPATCHED'
+  | 'OFFER_ACCEPTED'
+  | 'EVIDENCE_SUBMITTED'
+  | 'SAFEGATE_REJECTED'
+  | 'SYSTEM_RESET';
+
+export interface EcosystemEvent {
+  id: string;
+  timestamp: string;
+  sender: EcosystemActor;
+  recipient: EcosystemActor | 'ALL';
+  agentName: string;
+  eventType: EcosystemEventType;
+  title: string;
+  message: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface StateMutationChange {
+  field: string;
+  previousValue: string;
+  newValue: string;
+  badge?: string;
+  highlightType?: 'ROTATED' | 'CAPTURED' | 'SETTLED' | 'DISPUTED' | 'LOCKED' | 'SAFE';
+}
+
+export interface StateMutationDiff {
+  id: string;
+  timestamp: string;
+  actionLabel: string;
+  actor: EcosystemActor;
+  agentName: string;
+  targetId: string;
+  changes: StateMutationChange[];
+  downstreamImpact: string;
 }
 

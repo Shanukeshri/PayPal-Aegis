@@ -37,6 +37,13 @@ body {
   border: 1px solid #E5E0D8;
 }
 
+/* Highlight mutated authorization rows cleanly inside AG Grid */
+.ag-theme-quartz .ag-row.ag-row-mutated {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  box-shadow: inset 0 0 0 2px #3b82f6 !important;
+  animation: pulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 /* Scrollbar styles - soft neutral */
 ::-webkit-scrollbar {
   width: 6px;

@@ -9,6 +9,7 @@
 import { OpenRouter } from '@openrouter/sdk';
 import { config } from '../config';
 import logger from '../lib/logger';
+import { runContractParserAgent, runDeliveryAuditorAgent, runDisputeStrategistAgent } from './agents';
 
 // Response cache to prevent unnecessary repeat token usage
 const promptCache = new Map<string, string>();

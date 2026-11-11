@@ -7,6 +7,11 @@ import cors from 'cors';
 import { config } from './config';
 import logger from './lib/logger';
 import { store } from './lib/store';
+import {
+  registerEcosystemSocketEmitter,
+  publishEcosystemEvent,
+  publishStateMutationDiff,
+} from './lib/ecosystem-bus';
 import { safeGate } from './engines/safegate';
 import { holdManager } from './engines/hold-manager';
 
@@ -29,8 +34,11 @@ const io = new SocketIOServer(server, {
   },
 });
 
-// Register Socket.IO emitter with SafeGate HITL
+// Register Socket.IO emitter with SafeGate HITL and Tripartite Ecosystem Bus
 safeGate.registerSocketEmitter((event: string, data: unknown) => {
+  io.emit(event, data);
+});
+registerEcosystemSocketEmitter((event: string, data: unknown) => {
   io.emit(event, data);
 });
 
@@ -209,7 +217,49 @@ async function initializeDemoState() {
     store.setMilestone(m3);
 
     // Lock hold on Milestone 1 automatically
-    await holdManager.createMilestoneHold('m1-cloud-arch');
+    const holdRes = await holdManager.createMilestoneHold('m1-cloud-arch');
+
+    if (store.getEcosystemEvents().length === 0) {
+      publishEcosystemEvent({
+        sender: 'CLIENT',
+        recipient: 'ALL',
+        agentName: 'ContractParser (APIMatic v2)',
+        eventType: 'HOLD_CREATED',
+        title: 'Escrow Authorization Lock Active',
+        message: `$1,250.00 authorized by Acme Global Ventures on Orders v2 (Auth ID: ${holdRes.authorizationId}). Funds held safely, not debited.`,
+        payload: {
+          milestoneId: 'm1-cloud-arch',
+          orderId: holdRes.orderId,
+          authorizationId: holdRes.authorizationId,
+          amount: '$1,250.00 USD',
+        },
+      });
+
+      publishStateMutationDiff({
+        actionLabel: 'Initial Contract Ingestion & Escrow Lock',
+        actor: 'CLIENT',
+        agentName: 'ContractParser (APIMatic v2)',
+        targetId: 'm1-cloud-arch',
+        changes: [
+          {
+            field: 'Milestone 1 Status',
+            previousValue: 'DRAFT',
+            newValue: 'AUTHORIZED',
+            badge: 'ESCROW LOCKED',
+            highlightType: 'LOCKED',
+          },
+          {
+            field: 'authorization_id',
+            previousValue: 'UNASSIGNED',
+            newValue: holdRes.authorizationId,
+            badge: '72h WINDOW ACTIVE',
+            highlightType: 'LOCKED',
+          },
+        ],
+        downstreamImpact:
+          'Milestones 2 ($1,750.00) & 3 ($1,500.00) queued in Bryntum Gantt with Finish-to-Start dependency locks awaiting Milestone 1 settlement.',
+      });
+    }
 
     logger.info('Initial PayPal Aegis demo state initialized successfully.');
   } catch (err: any) {

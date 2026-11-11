@@ -14,7 +14,7 @@ const API_BASE =
 
 const client = axios.create({
   baseURL: API_BASE,
-  timeout: 15000,
+  timeout: 45000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -23,6 +23,7 @@ const client = axios.create({
 export const api = {
   // Demo status & fixtures
   getDemoStatus: () => client.get('/demo/status').then((r) => r.data),
+  getEcosystemFeed: () => client.get('/demo/ecosystem-feed').then((r) => r.data.data),
   resetDemo: () => client.post('/demo/reset').then((r) => r.data),
 
   // Judge Demo Buttons & Custom Playground
@@ -51,14 +52,24 @@ export const api = {
     client.post(`/escrow/milestones/${id}/void`, { reason }).then((r) => r.data),
   verifyDeliverable: (id: string, name?: string) =>
     client.post(`/escrow/milestones/${id}/deliverable`, { name }).then((r) => r.data),
+  clientApproveMilestone: (id: string) =>
+    client.post(`/escrow/milestones/${id}/client-approve`).then((r) => r.data),
+  clientDisputeMilestone: (
+    id: string,
+    payload?: { reason?: string; message?: string; disputeAmount?: string }
+  ) => client.post(`/escrow/milestones/${id}/client-dispute`, payload || {}).then((r) => r.data),
 
   // Disputes & Ratio Radar
   getDisputes: () => client.get<any, { data: { success: boolean; data: PayPalDispute[] } }>('/disputes').then((r) => r.data.data),
   getDisputeRatio: () => client.get<any, { data: { success: boolean; data: { current: DisputeRatioSnapshot; history: DisputeRatioSnapshot[] } } }>('/disputes/ratio').then((r) => r.data.data),
   makeDisputeOffer: (id: string, offerAmount: any, note: string) =>
     client.post(`/disputes/${id}/make-offer`, { offerAmount, note }).then((r) => r.data),
+  acceptDisputeOffer: (id: string, settlementAmount?: string) =>
+    client.post(`/disputes/${id}/accept-offer`, { settlementAmount }).then((r) => r.data),
   provideDisputeEvidence: (id: string) => client.post(`/disputes/${id}/provide-evidence`).then((r) => r.data),
   getEvidencePdfUrl: (id: string) => `${API_BASE}/disputes/${id}/evidence-pdf`,
+  getRagTelemetry: () => client.get('/disputes/telemetry/rag').then((r) => r.data.data),
+  getAgentTelemetry: () => client.get('/disputes/telemetry/agent').then((r) => r.data.data),
 
   // HITL Approval Gate
   getPendingApprovals: () => client.get<any, { data: { success: boolean; data: HITLApprovalRequest[] } }>('/hitl/pending').then((r) => r.data.data),
