@@ -180,3 +180,74 @@ export interface StateMutationDiff {
   downstreamImpact: string;
 }
 
+export type UserRole = 'CLIENT' | 'MERCHANT';
+
+export type NavPage = 'overview' | 'escrow' | 'delivery' | 'disputes' | 'activity';
+
+export type AgentKey = 'ContractParser' | 'DeliveryAuditor' | 'DisputeStrategist' | null;
+
+export type StepId = 1 | 2 | 3 | 4;
+
+export type StepStatus = 'IDLE' | 'IN_FLIGHT' | 'SUCCESS';
+
+export interface StepExecutionInfo {
+  status: StepStatus;
+  statusCode?: number;
+  latencyMs?: number;
+  lastExecutedAt?: string;
+  summary?: string;
+}
+
+export interface WireTelemetryData {
+  method: string;
+  endpoint: string;
+  latencyMs: number;
+  statusCode: number;
+  requestId: string;
+  crc32Checksum: string;
+  rawResponse: Record<string, any>;
+  activeAgent: string;
+  ragIndex: string;
+  ragLatencyMs: number;
+  documentIds: {
+    buyerIp: string;
+    deliverableHash: string;
+    contractScope: string;
+    channel3Sku: string;
+  };
+  synthesisTask: string;
+  liveAgent?: {
+    agentName: string;
+    phase: string;
+    selectedTool: string;
+    arguments: Record<string, any>;
+    reasoning: string;
+    scopedTools: string[];
+  };
+  liveRag?: {
+    elasticEndpoint: string;
+    documentsRetrieved: number;
+    transactionId: string;
+    cosineMath?: {
+      dotProduct: number;
+      normA: number;
+      normB: number;
+      similarity: number;
+    };
+  };
+}
+
+export interface CustomSowMilestone {
+  id: string;
+  name: string;
+  description: string;
+  amount: number | string;
+}
+
+export interface CustomSandboxExecutionPayload {
+  actionType: 'SEED_CONTRACT' | 'VERIFY_DELIVERABLE' | 'SIMULATE_DISPUTE';
+  payload: any;
+  summary: string;
+  guardrailNotice?: string;
+}
+

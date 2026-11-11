@@ -151,30 +151,24 @@ export const BryntumGanttView: React.FC<BryntumGanttViewProps> = ({
             <CalendarIcon className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-[#1C1917] flex items-center gap-2">
-              Bryntum Milestone Gantt Operating View
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[#0070BA] text-white font-semibold">
-                Bryntum ProjectModel Engine
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[#F4F1EA] text-[#57534E] border border-[#E5E0D8]">
-                Payment-Driven Shifting
-              </span>
+            <h2 className="text-base font-bold text-[#1C1917]">
+              Milestone Timeline
             </h2>
             <p className="text-xs text-[#57534E] mt-0.5">
-              Downstream phases automatically lock or shift when authorization holds fail; unlocks immediately upon Milestone capture
+              Downstream phases lock until prior milestone capture completes
             </p>
           </div>
         </div>
 
-        {/* Right side controls: Bryntum Export */}
+        {/* Right side controls: Schedule JSON Export */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowExportModal(true)}
             className="px-2.5 py-1 text-xs bg-white hover:bg-[#F4F1EA] text-[#0070BA] border border-[#0070BA]/40 rounded-lg flex items-center gap-1.5 transition font-semibold shadow-subtle"
-            title="Inspect or download official Bryntum ProjectModel JSON specification"
+            title="Inspect or download schedule ProjectModel JSON"
           >
             <CodeBracketIcon className="w-3.5 h-3.5" />
-            Export Bryntum ProjectModel JSON
+            Export Schedule JSON
           </button>
         </div>
       </div>

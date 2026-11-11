@@ -86,8 +86,12 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
     return rowData.filter((r) => r.isMutated).length;
   }, [rowData]);
 
-  const totalValue = useMemo(() => {
-    return rowData.reduce((acc, r) => acc + r.numericAmount, 0).toFixed(2);
+  const totalHeldValue = useMemo(() => {
+    const heldStatuses = new Set(['AUTHORIZED', 'REAUTHORIZED', 'VERIFIED']);
+    return rowData
+      .filter((r) => heldStatuses.has(r.status))
+      .reduce((acc, r) => acc + r.numericAmount, 0)
+      .toFixed(2);
   }, [rowData]);
 
   const columnDefs = useMemo<ColDef[]>(() => {
@@ -95,13 +99,14 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
       {
         headerName: 'Order ID',
         field: 'orderId',
-        width: 175,
-        minWidth: 165,
+        width: 155,
+        minWidth: 145,
         filter: 'agTextColumnFilter',
         cellRenderer: (params: any) => (
           <div className="flex items-center space-x-1.5 font-mono text-xs text-[#1C1917] h-full">
-            <span className="font-semibold">{params.value}</span>
+            <span className="font-semibold truncate">{params.value}</span>
             <button
+              type="button"
               onClick={() => copyToClipboard(params.value)}
               className="p-1 hover:text-[#0070BA] transition text-[#78716C]"
               title="Copy Order ID"
@@ -118,8 +123,8 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
       {
         headerName: 'Milestone Deliverable',
         field: 'name',
-        flex: 1.5,
-        minWidth: 220,
+        flex: 1,
+        minWidth: 185,
         filter: 'agTextColumnFilter',
         cellRenderer: (params: any) => (
           <div className="font-medium text-[#1C1917] flex items-center h-full">
@@ -130,8 +135,8 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
       {
         headerName: 'Amount',
         field: 'amount',
-        width: 130,
-        minWidth: 120,
+        width: 120,
+        minWidth: 110,
         filter: 'agTextColumnFilter',
         cellRenderer: (params: any) => (
           <div className="flex items-center h-full font-mono text-[#1C1917] font-bold text-xs">
@@ -142,8 +147,8 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
       {
         headerName: 'Authorization Mutation Diff (Old → New)',
         field: 'activeAuthId',
-        width: 320,
-        minWidth: 310,
+        width: 345,
+        minWidth: 330,
         filter: 'agTextColumnFilter',
         cellRenderer: (params: any) => {
           const isMutated = params.data.isMutated;
@@ -168,9 +173,9 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
                 </span>
                 <span
                   className="text-[10px] bg-[#0070BA] text-white font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide"
-                  title="Day-3 Reauthorization successfully rotated foreign key"
+                  title="Day-3 Reauthorization rotated authorization pointer"
                 >
-                  ROTATED
+                  Rotated
                 </span>
               </div>
             );
@@ -182,7 +187,7 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
                 {active}
               </span>
               <span className="text-[10px] text-[#78716C] bg-[#F5F5F4] px-1.5 py-0.5 rounded border border-[#E5E0D8]">
-                ORIGINAL
+                Original
               </span>
             </div>
           );
@@ -191,20 +196,21 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
       {
         headerName: '36-Char Idempotency UUID',
         field: 'requestId',
-        width: 310,
-        minWidth: 300,
+        width: 240,
+        minWidth: 215,
         filter: 'agTextColumnFilter',
         cellRenderer: (params: any) => {
           const val = params.value;
           return (
             <div className="flex items-center space-x-1.5 font-mono text-[11px] h-full">
               <span
-                className="bg-[#F9F8F5] text-[#1C1917] px-2 py-0.5 rounded border border-[#E5E0D8] font-medium truncate max-w-[250px]"
+                className="bg-[#F9F8F5] text-[#1C1917] px-2 py-0.5 rounded border border-[#E5E0D8] font-medium truncate max-w-[185px]"
                 title={`PayPal-Request-Id UUID v4: ${val}`}
               >
                 {val}
               </span>
               <button
+                type="button"
                 onClick={() => copyToClipboard(val)}
                 className="p-1 hover:text-[#0070BA] transition text-[#78716C]"
                 title="Copy full 36-character UUID"
@@ -222,8 +228,8 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
       {
         headerName: 'Hold Status',
         field: 'status',
-        width: 145,
-        minWidth: 135,
+        width: 135,
+        minWidth: 125,
         filter: 'agTextColumnFilter',
         cellRenderer: (params: any) => {
           const status = params.value;
@@ -252,8 +258,8 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
       {
         headerName: '72h Window',
         field: 'honorExpires',
-        width: 155,
-        minWidth: 145,
+        width: 140,
+        minWidth: 130,
         cellRenderer: (params: any) => (
           <div className="flex items-center text-xs text-[#57534E] h-full">
             <ClockIcon className="w-3.5 h-3.5 mr-1 text-[#0070BA] flex-shrink-0" />
@@ -264,8 +270,8 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
       {
         headerName: 'Lifecycle Action',
         field: 'id',
-        width: 155,
-        minWidth: 145,
+        width: 140,
+        minWidth: 130,
         cellRenderer: (params: any) => {
           const status = params.data.status;
           return (
@@ -311,17 +317,11 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
             <ShieldCheckIcon className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-[#1C1917] flex items-center gap-2">
-              AG Studio 3: Mutated Authorization Ledger
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[#0070BA] text-white font-semibold">
-                AG Grid Community v31.3
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[#F4F1EA] text-[#57534E] border border-[#E5E0D8]">
-                Engine 1 & 2
-              </span>
+            <h2 className="text-base font-bold text-[#1C1917]">
+              Authorization Ledger
             </h2>
             <p className="text-xs text-[#57534E] mt-0.5">
-              Tracks active vs original authorization_id pointers across 72h honor period renewals with 36-char idempotency keys
+              Tracks active and superseded authorization IDs across 72h hold renewals with idempotency keys
             </p>
           </div>
         </div>
@@ -339,7 +339,7 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
           </div>
           <div className="bg-[#F9F8F5] px-3 py-1 rounded-md border border-[#E5E0D8] flex items-center gap-1.5 font-mono">
             <span className="text-[#57534E]">Total Held:</span>
-            <span className="font-bold text-[#1C1917]">${totalValue} USD</span>
+            <span className="font-bold text-[#1C1917]">${totalHeldValue} USD</span>
           </div>
         </div>
       </div>
@@ -349,6 +349,9 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
         <div className="relative w-full max-w-sm">
           <MagnifyingGlassIcon className="w-4 h-4 text-[#78716C] absolute left-3 top-2.5" />
           <input
+            id="ledger-quick-filter"
+            name="ledgerQuickFilter"
+            aria-label="Quick search across all ledger columns"
             type="text"
             value={quickFilter}
             onChange={onQuickFilterChange}
@@ -356,14 +359,13 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#F9F8F5] border border-[#E5E0D8] rounded-lg text-[#1C1917] placeholder-[#78716C] focus:outline-none focus:border-[#0070BA] focus:ring-1 focus:ring-[#0070BA] transition"
           />
         </div>
-        <div className="text-[11px] text-[#78716C] font-mono hidden sm:flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          Live Write-Through Grid Active
+        <div className="text-[11px] text-[#78716C] hidden sm:block">
+          {rowData.length === 0 ? 'No authorization records yet' : `${rowData.length} milestone record${rowData.length === 1 ? '' : 's'}`}
         </div>
       </div>
 
       {/* AG Grid React Container */}
-      <div className="ag-theme-quartz w-full h-[310px] overflow-x-auto rounded-lg border border-[#E5E0D8]">
+      <div className="ag-theme-quartz w-full h-[310px] rounded-lg border border-[#E5E0D8] overflow-hidden">
         <AgGridReact
           rowData={rowData}
           columnDefs={columnDefs}
@@ -379,6 +381,7 @@ export const MutatedAuthLedger: React.FC<MutatedAuthLedgerProps> = ({
           }}
           pagination={true}
           paginationPageSize={5}
+          paginationPageSizeSelector={[5, 10, 20, 50]}
           onGridReady={onGridReady}
           animateRows={true}
           rowHeight={48}
