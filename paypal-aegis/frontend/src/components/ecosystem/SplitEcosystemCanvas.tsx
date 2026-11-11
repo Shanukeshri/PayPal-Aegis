@@ -74,7 +74,7 @@ export const SplitEcosystemCanvas: React.FC<SplitEcosystemCanvasProps> = ({
   const latestEvent = events[0];
   const latestDiff = diffs[0];
   const activeMilestone = milestones.find((m) => m.status !== 'DRAFT') || milestones[0];
-  const primaryDispute = disputes[0];
+  const primaryDispute = disputes[disputes.length - 1];
   const pendingApproval = pendingApprovals[0];
 
   const ratioVal = ratioSnapshot?.ratio ?? 0.0133;
@@ -156,37 +156,9 @@ export const SplitEcosystemCanvas: React.FC<SplitEcosystemCanvasProps> = ({
     '350.00';
 
   return (
-    <section aria-label="Tripartite PayPal Ecosystem Canvas" className="space-y-4">
-      {/* Ecosystem Top Strip */}
-      <div className="bg-white border border-[#E5E0D8] rounded-xl px-4 py-3 shadow-subtle flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center space-x-2.5">
-          <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-[#0070BA] text-white text-xs font-bold">
-            ⚖️ Tripartite Ecosystem Canvas
-          </span>
-          <span className="text-xs text-[#57534E]">
-            Live synchronized state across <strong className="text-purple-800">Client</strong>,{' '}
-            <strong className="text-[#0070BA]">PayPal Aegis</strong>, and{' '}
-            <strong className="text-emerald-800">Business</strong> — zero invisible steps.
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 text-[11px] font-mono">
-          <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-semibold">
-            Left: Buyer Portal
-          </span>
-          <span className="text-[#A8A29E]">⟷</span>
-          <span className="px-2 py-0.5 rounded bg-[#E6F2FA] text-[#0070BA] border border-[#0070BA]/30 font-semibold">
-            Center: PayPal Engine
-          </span>
-          <span className="text-[#A8A29E]">⟷</span>
-          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
-            Right: Merchant Studio
-          </span>
-        </div>
-      </div>
-
+    <section aria-label="Tripartite PayPal Ecosystem Canvas" className="space-y-2.5">
       {/* 3-Column Synchronized Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-stretch">
         {/* LEFT COLUMN (4 cols): Client / Buyer */}
         <div className="xl:col-span-4">
           <ClientBuyerPortalView
@@ -200,10 +172,10 @@ export const SplitEcosystemCanvas: React.FC<SplitEcosystemCanvasProps> = ({
         </div>
 
         {/* CENTER COLUMN (4 cols): PayPal Aegis Arbiter & Agent Engine */}
-        <div className="xl:col-span-4 bg-white border border-[#0070BA]/40 rounded-2xl p-4 shadow-subtle flex flex-col justify-between space-y-3.5 ring-1 ring-[#0070BA]/10">
-          <div className="space-y-3">
+        <div className="xl:col-span-4 bg-white border border-[#0070BA]/40 rounded-2xl p-3 shadow-subtle flex flex-col justify-between space-y-2.5 ring-1 ring-[#0070BA]/10">
+          <div className="space-y-2.5">
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#E5E0D8]">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E5E0D8]">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-lg bg-[#0070BA] flex items-center justify-center text-white shadow-subtle">
                   <BoltIcon className="w-5 h-5" />
@@ -466,10 +438,10 @@ export const SplitEcosystemCanvas: React.FC<SplitEcosystemCanvasProps> = ({
         </div>
 
         {/* RIGHT COLUMN (4 cols): Business / Merchant */}
-        <div className="xl:col-span-4 bg-white border border-emerald-200 rounded-2xl p-4 shadow-subtle flex flex-col justify-between space-y-3.5 h-full">
-          <div className="space-y-3">
+        <div className="xl:col-span-4 bg-white border border-emerald-200 rounded-2xl p-3 shadow-subtle flex flex-col justify-between space-y-2.5 h-full">
+          <div className="space-y-2.5">
             {/* Merchant Identity Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#E5E0D8]">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E5E0D8]">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
                   <BuildingOffice2Icon className="w-5 h-5" />
@@ -725,7 +697,9 @@ export const SplitEcosystemCanvas: React.FC<SplitEcosystemCanvasProps> = ({
                         type="button"
                         disabled={
                           busyAction === 'dispatch-offer' ||
-                          primaryDispute.status === 'WAITING_FOR_BUYER_RESPONSE'
+                          primaryDispute.status === 'WAITING_FOR_BUYER_RESPONSE' ||
+                          primaryDispute.status === 'UNDER_REVIEW' ||
+                          primaryDispute.dispute_life_cycle_stage === 'CHARGEBACK'
                         }
                         onClick={() =>
                           onMerchantDispatchOffer(primaryDispute.dispute_id, offerAmount)
@@ -734,19 +708,28 @@ export const SplitEcosystemCanvas: React.FC<SplitEcosystemCanvasProps> = ({
                       >
                         <HandThumbUpIcon className="w-3.5 h-3.5" />
                         <span>
-                          {primaryDispute.status === 'WAITING_FOR_BUYER_RESPONSE'
+                          {primaryDispute.dispute_life_cycle_stage === 'CHARGEBACK'
+                            ? 'Chargeback (PDF Only)'
+                            : primaryDispute.status === 'UNDER_REVIEW'
+                            ? 'Under Adjudication'
+                            : primaryDispute.status === 'WAITING_FOR_BUYER_RESPONSE'
                             ? 'Offer Sent ✓'
                             : `Dispatch $${offerAmount} Offer`}
                         </span>
                       </button>
                       <button
                         type="button"
-                        disabled={busyAction === 'submit-evidence'}
+                        disabled={
+                          busyAction === 'submit-evidence' ||
+                          primaryDispute.status === 'UNDER_REVIEW'
+                        }
                         onClick={() => onMerchantSubmitEvidence(primaryDispute.dispute_id)}
                         className="px-2 py-1.5 text-[10px] font-bold rounded-lg bg-white hover:bg-[#F4F1EA] text-[#1C1917] border border-[#E5E0D8] transition disabled:opacity-40 flex items-center justify-center gap-1"
                       >
                         <DocumentArrowUpIcon className="w-3.5 h-3.5 text-[#0070BA]" />
-                        <span>Submit A4 PDF</span>
+                        <span>
+                          {primaryDispute.status === 'UNDER_REVIEW' ? 'Evidence Filed ✓' : 'Submit A4 PDF'}
+                        </span>
                       </button>
                     </div>
                   )}

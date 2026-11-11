@@ -81,14 +81,14 @@ export const StateMutationDiffBanner: React.FC<StateMutationDiffBannerProps> = (
     return (
       <div
         key={diff.id}
-        className={`rounded-xl border p-4 shadow-subtle transition-all ${
+        className={`rounded-xl border p-2.5 shadow-subtle transition-all ${
           isPrimary
             ? 'bg-white border-[#0070BA]/40 ring-1 ring-[#0070BA]/20'
             : 'bg-[#F9F8F5] border-[#E5E0D8]'
         }`}
       >
         {/* Top Row: What Changed Header & Navigation */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[#E5E0D8]">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[#E5E0D8]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-[#0070BA] text-white">
               <BoltIcon className="w-3 h-3" />

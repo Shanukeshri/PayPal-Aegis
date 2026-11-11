@@ -144,7 +144,7 @@ export const LiveTelemetryInspectorDrawer: React.FC<LiveTelemetryInspectorDrawer
         contractScope: 'DOC-SOW-2026-AG-091',
         channel3Sku: 'CH3-TECH-88921',
       },
-      synthesisTask: 'Multimodal catalog match confirmed (CH3-TECH-88921) + 96.5% Elastic kNN authenticity. Staged in SafeGate HITL.',
+      synthesisTask: 'Multimodal catalog match confirmed (CH3-TECH-88921) + 85.9% Elastic kNN authenticity. Staged in SafeGate HITL.',
     },
     4: {
       method: 'POST',

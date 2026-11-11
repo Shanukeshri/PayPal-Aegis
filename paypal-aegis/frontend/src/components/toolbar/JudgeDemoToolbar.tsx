@@ -67,7 +67,7 @@ export const JudgeDemoToolbar: React.FC<JudgeDemoToolbarProps> = ({
   const isSimulated = statusInfo.mode === 'DETERMINISTIC_SIMULATION';
 
   return (
-    <header className="bg-white border-b border-[#E5E0D8] px-4 py-2.5 sticky top-0 z-40 shadow-subtle">
+    <header className="bg-white border-b border-[#E5E0D8] px-4 py-1.5 sticky top-0 z-40 shadow-subtle">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
         {/* Brand identity & Environment status */}
         <div className="flex items-center space-x-3">

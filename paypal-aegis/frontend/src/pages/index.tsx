@@ -213,18 +213,26 @@ export default function Dashboard() {
     try {
       if (stepId === 1) {
         const res = await api.fixtureSeedContract();
-        const duration = Math.round(performance.now() - startTime);
+        const duration = Math.max(1, Math.round(performance.now() - startTime));
         const [agentTel, ragTel] = await Promise.all([
           api.getAgentTelemetry().catch(() => null),
           api.getRagTelemetry().catch(() => null),
         ]);
+        const createdOrderId =
+          res.data?.milestones?.[0]?.orderId ||
+          res.data?.milestone?.paypalOrderId ||
+          '8JC9062286218560V';
+        const createdAuthId =
+          res.data?.milestones?.[0]?.activeAuthorizationId ||
+          res.data?.milestone?.activeAuthorizationId ||
+          '0VF52814937998046';
 
         setStepStatusMap((prev) => ({
           ...prev,
           1: {
             status: 'SUCCESS',
             statusCode: 201,
-            latencyMs: duration || 142,
+            latencyMs: duration,
             summary: res.message || 'Milestone 1 locked in escrow hold',
           },
         }));
@@ -233,7 +241,7 @@ export default function Dashboard() {
           method: 'POST',
           endpoint: 'https://api-m.sandbox.paypal.com/v2/checkout/orders',
           statusCode: 201,
-          latencyMs: duration || 142,
+          latencyMs: duration,
           requestId: 'd3b0c442-98fc-1c14-9afb-f4c8996fb924',
           crc32Checksum: '0x8F3C921A',
           activeAgent: 'ContractParser (APIMatic Grounded)',
@@ -246,34 +254,61 @@ export default function Dashboard() {
             channel3Sku: 'CH3-TECH-88921',
           },
           synthesisTask:
-            'Parsed B2B contract SOW into 3 Gantt milestones. Created Orders v2 authorization hold.',
+            'Parsed B2B contract SOW into 3 Gantt milestones ($4,500.00 total). Created Orders v2 authorization hold.',
+          rawResponse: {
+            id: createdOrderId,
+            intent: 'AUTHORIZE',
+            status: 'COMPLETED',
+            purchase_units: [
+              {
+                reference_id: 'MS-1',
+                amount: { currency_code: 'USD', value: '1250.00' },
+                payments: { authorizations: [{ id: createdAuthId, status: 'CREATED' }] },
+              },
+            ],
+            milestones_parsed: 3,
+            total_contract_budget_usd: '4500.00',
+          },
           liveAgent: agentTel || undefined,
           liveRag: ragTel || undefined,
         });
       } else if (stepId === 2) {
-        const targetMilestoneId =
-          milestones.find((m) => m.status === 'AUTHORIZED' || m.status === 'REAUTHORIZED')?.id ||
-          milestones[0]?.id;
+        const targetMilestone =
+          milestones.find((m) => m.status === 'AUTHORIZED' || m.status === 'REAUTHORIZED') ||
+          milestones[0];
+        const targetMilestoneId = targetMilestone?.id;
+        const prevAuthId = targetMilestone?.activeAuthorizationId || '0VF52814937998046';
         const res = await api.fixtureFastForwardDay3(targetMilestoneId);
-        const duration = Math.round(performance.now() - startTime);
+        const duration = Math.max(1, Math.round(performance.now() - startTime));
+        const rotatedAuthId =
+          res.data?.result?.newAuthorizationId ||
+          res.data?.milestone?.activeAuthorizationId ||
+          res.data?.newAuthorizationId ||
+          '9LK88776655443321';
+        const prevRotatedFrom =
+          res.data?.result?.previousAuthorizationId ||
+          res.data?.previousAuthorizationId ||
+          prevAuthId;
+        const nextExpiry =
+          res.data?.result?.newHonorPeriodExpiresAt ||
+          res.data?.newExpiresAt ||
+          new Date(Date.now() + 72 * 3600 * 1000).toISOString();
 
         setStepStatusMap((prev) => ({
           ...prev,
           2: {
             status: 'SUCCESS',
             statusCode: 200,
-            latencyMs: duration || 168,
+            latencyMs: duration,
             summary: res.message || 'authorization_id rotated (+72h)',
           },
         }));
 
         setLiveWireData({
           method: 'POST',
-          endpoint: `https://api-m.sandbox.paypal.com/v2/payments/authorizations/${
-            milestones[0]?.activeAuthorizationId || '0VF52814937998046'
-          }/reauthorize`,
+          endpoint: `https://api-m.sandbox.paypal.com/v2/payments/authorizations/${prevAuthId}/reauthorize`,
           statusCode: 200,
-          latencyMs: duration || 168,
+          latencyMs: duration,
           requestId: 'a891e442-77bb-4f12-881c-d4c8996fb102',
           crc32Checksum: '0x3E71BA99',
           activeAgent: '72h Hold Keeper (Render Workflows)',
@@ -287,32 +322,52 @@ export default function Dashboard() {
           },
           synthesisTask:
             '72h timer elapsed. Mutated authorization_id pointer rotated in AG Studio ledger.',
+          rawResponse: {
+            id: rotatedAuthId,
+            previous_authorization_id: prevRotatedFrom,
+            status: 'CREATED',
+            amount: { currency_code: 'USD', value: '1250.00' },
+            expiration_time: nextExpiry,
+            reauthorized_at_hour: 72,
+          },
         });
       } else if (stepId === 3) {
         const res = await api.fixtureVerifyDeliverable();
-        const duration = Math.round(performance.now() - startTime);
+        const duration = Math.max(1, Math.round(performance.now() - startTime));
         const [agentTel, ragTel] = await Promise.all([
           api.getAgentTelemetry().catch(() => null),
           api.getRagTelemetry().catch(() => null),
         ]);
+        const deliv = res.data?.milestone?.deliverables?.[0] || res.data?.deliverable;
+        const knnRaw =
+          deliv?.verificationDetails?.elasticKnnScore ??
+          res.data?.verification?.elasticKnnScore ??
+          0.8586;
+        const knnPct = (knnRaw * 100).toFixed(1);
+        const sku =
+          deliv?.verificationDetails?.channel3SkuMatch ||
+          res.data?.verification?.channel3SkuMatch ||
+          'CH3-TECH-88921';
+        const authId =
+          res.data?.milestone?.activeAuthorizationId ||
+          milestones[0]?.activeAuthorizationId ||
+          '9LK88776655443321';
 
         setStepStatusMap((prev) => ({
           ...prev,
           3: {
             status: 'SUCCESS',
             statusCode: 200,
-            latencyMs: duration || 154,
+            latencyMs: duration,
             summary: res.message || 'Deliverable verified & capture staged in HITL',
           },
         }));
 
         setLiveWireData({
           method: 'POST',
-          endpoint: `https://api-m.sandbox.paypal.com/v2/payments/authorizations/${
-            milestones[0]?.activeAuthorizationId || '9LK88776655443321'
-          }/capture`,
+          endpoint: '/api/demo/fixtures/verify-deliverable',
           statusCode: 200,
-          latencyMs: duration || 154,
+          latencyMs: duration,
           requestId: 'c45b8812-32aa-4c22-9901-b7c8996fb331',
           crc32Checksum: '0x99A41DC2',
           activeAgent: 'DeliveryAuditor (Vision + Channel3 Catalog RAG)',
@@ -322,37 +377,46 @@ export default function Dashboard() {
             buyerIp: '203.0.113.42',
             deliverableHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
             contractScope: 'DOC-SOW-2026-AG-091',
-            channel3Sku: 'CH3-TECH-88921',
+            channel3Sku: sku,
           },
-          synthesisTask:
-            'Multimodal catalog match confirmed (CH3-TECH-88921) + 96.5% Elastic kNN authenticity. Paused in SafeGate HITL.',
+          synthesisTask: `Multimodal catalog match confirmed (${sku}) + ${knnPct}% Elastic kNN authenticity. Paused in SafeGate HITL.`,
+          rawResponse: {
+            deliverable_id: deliv?.id || 'DEL-MS1-VERIFIED',
+            staged_capture_authorization_id: authId,
+            channel3_sku: sku,
+            elastic_knn_score: knnRaw,
+            elastic_knn_percent: `${knnPct}%`,
+            authentic: true,
+            hitl_gate_status: 'PENDING_HUMAN_APPROVAL',
+            milestone_amount: { currency_code: 'USD', value: '1250.00' },
+          },
           liveAgent: agentTel || undefined,
           liveRag: ragTel || undefined,
         });
       } else if (stepId === 4) {
         const res = await api.fixtureSimulateDispute();
-        const duration = Math.round(performance.now() - startTime);
+        const duration = Math.max(1, Math.round(performance.now() - startTime));
         const [agentTel, ragTel] = await Promise.all([
           api.getAgentTelemetry().catch(() => null),
           api.getRagTelemetry().catch(() => null),
         ]);
+        const disputeId = res.data?.dispute?.dispute_id || 'PP-D-40193';
 
         setStepStatusMap((prev) => ({
           ...prev,
           4: {
             status: 'SUCCESS',
             statusCode: 200,
-            latencyMs: duration || 210,
+            latencyMs: duration,
             summary: res.message || 'Dispute triage & legal PDF compiled',
           },
         }));
 
         setLiveWireData({
           method: 'POST',
-          endpoint:
-            'https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-D-40193/provide-evidence',
+          endpoint: '/api/demo/fixtures/simulate-dispute',
           statusCode: 200,
-          latencyMs: duration || 210,
+          latencyMs: duration,
           requestId: 'f77c1244-99dd-411a-ba88-e5c8996fb779',
           crc32Checksum: '0x5C89F311',
           activeAgent: 'DisputeStrategist (Elastic Audit RAG + Legal PDF Compiler)',
@@ -365,7 +429,17 @@ export default function Dashboard() {
             channel3Sku: 'CH3-TECH-88921',
           },
           synthesisTask:
-            'Auto-compiled 2-page A4 PDF representment bundle + proposed $350.00 ($0 fee) pre-escalation offer.',
+            'Opened Inquiry PP-D-40193 (1.42% warning tier), staged 2-page A4 PDF preview, and recommended $350.00 ($0 fee) Branch A offer.',
+          rawResponse: {
+            dispute_id: disputeId,
+            dispute_life_cycle_stage: 'INQUIRY',
+            status: 'WAITING_FOR_SELLER_RESPONSE',
+            reason: 'MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED',
+            dispute_amount: { currency_code: 'USD', value: '350.00' },
+            rolling_90d_ratio: '1.42%',
+            pdf_preview_staged: true,
+            recommended_action: 'PRE_ESCALATION_MAKE_OFFER_ZERO_FEE',
+          },
           liveAgent: agentTel || undefined,
           liveRag: ragTel || undefined,
         });
@@ -389,10 +463,16 @@ export default function Dashboard() {
   ) => {
     setBusyAction(actionKey);
     if (agent) setActiveAgent(agent);
+    const t0 = performance.now();
     try {
       await fn();
+      const elapsed = Math.max(1, Math.round(performance.now() - t0));
       if (telemetry) {
-        setLiveWireData((prev) => ({ ...prev, ...telemetry }));
+        setLiveWireData((prev) => ({
+          ...prev,
+          latencyMs: elapsed,
+          ...telemetry,
+        }));
       }
       await loadDashboardData();
     } catch (err: any) {
@@ -416,9 +496,15 @@ export default function Dashboard() {
         method: 'POST',
         endpoint: `/api/escrow/milestones/${milestoneId}/client-approve`,
         statusCode: 200,
+        crc32Checksum: '0x2D90A412',
         activeAgent: 'DeliveryAuditor + SafeGate Guardrail',
         synthesisTask:
           'Buyer verified deliverable quality. Release capture authorized & SafeGate notified.',
+        rawResponse: {
+          milestone_id: milestoneId,
+          buyer_approval: 'APPROVED',
+          safegate_release_ready: true,
+        },
       }
     );
 
@@ -437,9 +523,16 @@ export default function Dashboard() {
         method: 'POST',
         endpoint: `/api/escrow/milestones/${milestoneId}/client-dispute`,
         statusCode: 201,
+        crc32Checksum: '0x6A12F004',
         activeAgent: 'DisputeStrategist (1.5% Shield Defense)',
         synthesisTask:
           'Buyer raised dispute inquiry. Rolling 90-day ratio recalculated & SafeGate escrow freeze evaluated.',
+        rawResponse: {
+          milestone_id: milestoneId,
+          dispute_life_cycle_stage: 'INQUIRY',
+          status: 'WAITING_FOR_SELLER_RESPONSE',
+          reason: 'MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED',
+        },
       }
     );
 
@@ -455,31 +548,77 @@ export default function Dashboard() {
         method: 'POST',
         endpoint: `/api/disputes/${disputeId}/accept-offer`,
         statusCode: 200,
+        crc32Checksum: '0x18F7C201',
         activeAgent: 'DisputeStrategist (Branch A Settled)',
-        synthesisTask: `Buyer accepted $${amount} USD pre-escalation offer ($0 dispute fee). 90-day ratio restored to Safe Tier.`,
+        synthesisTask: `Buyer accepted $${amount} USD pre-escalation offer ($0 dispute fee). 90-day ratio restored to Safe Tier (0.95%).`,
+        rawResponse: {
+          dispute_id: disputeId,
+          dispute_life_cycle_stage: 'INQUIRY',
+          status: 'RESOLVED',
+          offer_accepted: true,
+          settlement_amount: { currency_code: 'USD', value: amount },
+          dispute_fee: '0.00',
+          restored_ratio: '0.95%',
+          tier: 'STANDARD_TIER',
+        },
       }
     );
 
   // Business / Merchant & SafeGate Operator Actions
   const handleMerchantFastForwardDay3 = (milestoneId: string) =>
-    runEcosystemAction('merchant-day3', 'ContractParser', async () => {
-      await api.fixtureFastForwardDay3(milestoneId);
-      setCurrentStage(2);
-      setStepStatusMap((prev) => ({
-        ...prev,
-        2: { status: 'SUCCESS', statusCode: 200, summary: 'authorization_id rotated (+72h)' },
-      }));
-    });
+    runEcosystemAction(
+      'merchant-day3',
+      'ContractParser',
+      async () => {
+        await api.fixtureFastForwardDay3(milestoneId);
+        setCurrentStage(2);
+        setStepStatusMap((prev) => ({
+          ...prev,
+          2: { status: 'SUCCESS', statusCode: 200, summary: 'authorization_id rotated (+72h)' },
+        }));
+      },
+      {
+        method: 'POST',
+        endpoint: `/api/demo/fixtures/fast-forward-day3`,
+        statusCode: 200,
+        crc32Checksum: '0x3E71BA99',
+        activeAgent: '72h Hold Keeper (Render Workflows)',
+        synthesisTask: '72h timer elapsed. Mutated authorization_id pointer rotated in AG Studio ledger.',
+        rawResponse: {
+          milestone_id: milestoneId,
+          status: 'REAUTHORIZED',
+          reauthorized_at_hour: 72,
+        },
+      }
+    );
 
   const handleMerchantVerifyDeliverable = (milestoneId: string) =>
-    runEcosystemAction('merchant-verify', 'DeliveryAuditor', async () => {
-      await api.fixtureVerifyDeliverable({ milestoneId });
-      setCurrentStage(3);
-      setStepStatusMap((prev) => ({
-        ...prev,
-        3: { status: 'SUCCESS', statusCode: 200, summary: 'Deliverable audited -> SafeGate HITL' },
-      }));
-    });
+    runEcosystemAction(
+      'merchant-verify',
+      'DeliveryAuditor',
+      async () => {
+        await api.fixtureVerifyDeliverable({ milestoneId });
+        setCurrentStage(3);
+        setStepStatusMap((prev) => ({
+          ...prev,
+          3: { status: 'SUCCESS', statusCode: 200, summary: 'Deliverable audited -> SafeGate HITL' },
+        }));
+      },
+      {
+        method: 'POST',
+        endpoint: '/api/demo/fixtures/verify-deliverable',
+        statusCode: 200,
+        crc32Checksum: '0x99A41DC2',
+        activeAgent: 'DeliveryAuditor (Vision + Channel3 Catalog RAG)',
+        synthesisTask: 'Deliverable audited with Channel3 + Elastic kNN (85.9%). Paused in SafeGate HITL.',
+        rawResponse: {
+          milestone_id: milestoneId,
+          channel3_sku: 'CH3-TECH-88921',
+          elastic_knn_percent: '85.9%',
+          hitl_gate_status: 'PENDING_HUMAN_APPROVAL',
+        },
+      }
+    );
 
   const handleApproveHitl = (approvalId: string) =>
     runEcosystemAction(
@@ -493,9 +632,18 @@ export default function Dashboard() {
         method: 'POST',
         endpoint: `/api/hitl/${approvalId}/approve`,
         statusCode: 200,
+        crc32Checksum: '0x71BA88E0',
         activeAgent: 'SafeGate HITL -> PayPal Capture v2',
         synthesisTask:
           'Operator signed HITL capture approval. Funds transferred from escrow hold to merchant settlement.',
+        rawResponse: {
+          approval_id: approvalId,
+          decision: 'APPROVED',
+          approved_by: 'sec-lead@aegis.corp',
+          paypal_capture_status: 'COMPLETED',
+          final_capture: true,
+          gross_amount: { currency_code: 'USD', value: '1250.00' },
+        },
       }
     );
 
@@ -505,16 +653,65 @@ export default function Dashboard() {
     });
 
   const handleMerchantDispatchOffer = (disputeId: string, amount: string) =>
-    runEcosystemAction('merchant-offer', 'DisputeStrategist', async () => {
-      await api.makeDisputeOffer(disputeId, amount, 'REFUND');
-      setCurrentStage(4);
-    });
+    runEcosystemAction(
+      'merchant-offer',
+      'DisputeStrategist',
+      async () => {
+        await api.makeDisputeOffer(disputeId, amount, 'REFUND');
+        setCurrentStage(4);
+      },
+      {
+        method: 'POST',
+        endpoint: `/api/disputes/${disputeId}/make-offer`,
+        statusCode: 200,
+        crc32Checksum: '0x4E82C109',
+        activeAgent: 'DisputeStrategist (Branch A: $0-Fee Offer)',
+        synthesisTask: `Dispatched $${amount} USD pre-escalation settlement offer ($0 dispute fee) to Client Inbox.`,
+        rawResponse: {
+          dispute_id: disputeId,
+          dispute_life_cycle_stage: 'INQUIRY',
+          status: 'WAITING_FOR_BUYER_RESPONSE',
+          offer_type: 'REFUND',
+          offer_amount: { currency_code: 'USD', value: amount },
+          dispute_fee: '0.00',
+        },
+      }
+    );
 
   const handleMerchantSubmitEvidence = (disputeId: string) =>
-    runEcosystemAction('merchant-evidence', 'DisputeStrategist', async () => {
-      await api.provideDisputeEvidence(disputeId);
-      setCurrentStage(4);
-    });
+    runEcosystemAction(
+      'merchant-evidence',
+      'DisputeStrategist',
+      async () => {
+        await api.provideDisputeEvidence(disputeId);
+        setCurrentStage(4);
+      },
+      {
+        method: 'POST',
+        endpoint: `/api/disputes/${disputeId}/provide-evidence`,
+        statusCode: 200,
+        crc32Checksum: '0x5C89F311',
+        activeAgent: 'DisputeStrategist (Branch B: Multipart A4 PDF)',
+        synthesisTask: `Compiled & uploaded multipart A4 PDF representment bundle for ${disputeId}. Claim moved to UNDER_REVIEW.`,
+        rawResponse: {
+          dispute_id: disputeId,
+          status: 'UNDER_REVIEW',
+          evidence_submitted: {
+            file_name: `evidence_${disputeId}.pdf`,
+            pages: 2,
+            format: 'A4_MULTIPART_FORM_DATA',
+            evidence_type: 'PROOF_OF_FULFILLMENT',
+          },
+          links: [
+            {
+              rel: 'self',
+              method: 'GET',
+              href: `https://api-m.sandbox.paypal.com/v1/customer/disputes/${disputeId}`,
+            },
+          ],
+        },
+      }
+    );
 
   const handleCapture = (milestoneId: string) =>
     runEcosystemAction('capture', 'DeliveryAuditor', async () => {
@@ -571,12 +768,16 @@ export default function Dashboard() {
       id: 3,
       name: '🚨 1.5% Dispute Shield & Evidentiary RAG',
       icon: ShieldExclamationIcon,
-      badge: disputes.some((d) => d.status === 'RESOLVED')
-        ? 'RESOLVED'
-        : `${ratioSnapshot ? (ratioSnapshot.ratio * 100).toFixed(2) : '0.95'}%`,
-      badgeColor: disputes.some((d) => d.status === 'RESOLVED')
-        ? 'bg-emerald-50 text-emerald-800'
-        : 'bg-amber-50 text-amber-800',
+      badge:
+        disputes[disputes.length - 1]?.status === 'UNDER_REVIEW'
+          ? 'UNDER_REVIEW'
+          : disputes[disputes.length - 1]?.status === 'RESOLVED'
+          ? 'RESOLVED'
+          : `${ratioSnapshot ? (ratioSnapshot.ratio * 100).toFixed(2) : '0.95'}%`,
+      badgeColor:
+        disputes[disputes.length - 1]?.status === 'RESOLVED'
+          ? 'bg-emerald-50 text-emerald-800'
+          : 'bg-amber-50 text-amber-800',
     },
   ];
 
@@ -642,10 +843,10 @@ export default function Dashboard() {
       />
 
       {/* Primary Content Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-5">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-2.5 sm:px-6 sm:py-3 space-y-2.5">
         {/* Compact Executive Summary KPI Strip */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-white border border-[#E5E0D8] rounded-xl p-3 shadow-subtle flex items-center justify-between">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div className="bg-white border border-[#E5E0D8] rounded-xl p-2.5 shadow-subtle flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-[#78716C] uppercase tracking-wider block">
                 Active Escrow Holds
@@ -659,7 +860,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white border border-[#E5E0D8] rounded-xl p-3 shadow-subtle flex items-center justify-between">
+          <div className="bg-white border border-[#E5E0D8] rounded-xl p-2.5 shadow-subtle flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-[#78716C] uppercase tracking-wider block">
                 Settled Milestones
@@ -673,7 +874,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white border border-[#E5E0D8] rounded-xl p-3 shadow-subtle flex items-center justify-between">
+          <div className="bg-white border border-[#E5E0D8] rounded-xl p-2.5 shadow-subtle flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-[#78716C] uppercase tracking-wider block">
                 90-Day Dispute Ratio
@@ -700,7 +901,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white border border-[#E5E0D8] rounded-xl p-3 shadow-subtle flex items-center justify-between">
+          <div className="bg-white border border-[#E5E0D8] rounded-xl p-2.5 shadow-subtle flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-[#78716C] uppercase tracking-wider block flex items-center gap-1.5">
                 SafeGate Queue
@@ -731,14 +932,14 @@ export default function Dashboard() {
         />
 
         {/* 4 Full-Width Desktop Tabs Navigation Bar */}
-        <div className="bg-white border border-[#E5E0D8] rounded-xl p-1.5 shadow-subtle flex flex-wrap gap-1.5">
+        <div className="bg-white border border-[#E5E0D8] rounded-xl p-1 shadow-subtle flex flex-wrap gap-1">
           {tabs.map((tab) => {
             const isTabActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 min-w-[200px] flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+                className={`flex-1 min-w-[200px] flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
                   isTabActive
                     ? 'bg-[#0070BA] text-white shadow-subtle'
                     : 'bg-transparent text-[#57534E] hover:text-[#1C1917] hover:bg-[#F9F8F5]'
@@ -872,7 +1073,9 @@ export default function Dashboard() {
             <DisputeDefenseRevenueShieldView
               ratioSnapshot={ratioSnapshot}
               disputes={disputes}
+              milestones={milestones}
               onActionComplete={loadDashboardData}
+              onWireUpdate={(tel) => setLiveWireData((prev) => ({ ...prev, ...tel }))}
             />
           </div>
         )}

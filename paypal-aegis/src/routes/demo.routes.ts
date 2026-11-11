@@ -345,17 +345,18 @@ router.post('/fixtures/seed-contract', async (req: Request, res: Response) => {
       store.setMilestone(m);
     }
 
-    // Run ContractParser autonomous agent with scoped APIMatic tool schemas
+    // Run ContractParser agent & PayPal Orders v2 Escrow Hold in parallel for fast demo responsiveness
     emitAgentState('ContractParser', 'ESCROW_SETUP', 'THINKING');
-    try {
-      await runContractParserAgent(rawSowText || targetProject.description || 'Milestone delivery scope');
-    } catch (agentErr: any) {
-      logger.warn('ContractParserAgent execution note', { error: agentErr.message });
-    }
-
-    // Immediately execute Milestone 1 Escrow Hold (Step 1)
     const firstMilestoneId = targetMilestones[0].id;
-    const holdResult = await holdManager.createMilestoneHold(firstMilestoneId);
+    const [, holdResult] = await Promise.all([
+      runContractParserAgent(
+        rawSowText || targetProject.description || 'Milestone delivery scope'
+      ).catch((agentErr: any) => {
+        logger.warn('ContractParserAgent execution note', { error: agentErr.message });
+        return null;
+      }),
+      holdManager.createMilestoneHold(firstMilestoneId),
+    ]);
 
     const updatedMilestones = store.getMilestonesByProject(projectId);
     targetProject.milestones = updatedMilestones;
@@ -548,9 +549,17 @@ router.post('/fixtures/verify-deliverable', async (req: Request, res: Response) 
     }
 
     const searchQuery = query || customTitle || 'enterprise-cloud-architecture';
+    const deliverableFileName = fileName || 'production_cloud_architecture_spec.pdf';
+    const fakeBuffer = Buffer.from(
+      `Deliverable artifact content for ${milestone.name} - SKU: ${customSku || 'CH3-TECH-88921'} - File: ${deliverableFileName}`
+    );
 
-    // 1. Channel3 Catalog Spec Verification
-    let ch3Spec = await verificationService.verifyWithChannel3(searchQuery);
+    // 1 & 2. Run Channel3 Catalog Spec Verification & Elastic kNN Authenticity Verification in parallel
+    const [rawCh3Spec, elasticAuth] = await Promise.all([
+      verificationService.verifyWithChannel3(searchQuery),
+      verificationService.verifyDeliverableAuthenticity(deliverableFileName, fakeBuffer),
+    ]);
+    let ch3Spec = rawCh3Spec;
     if (customTitle || customSku) {
       ch3Spec = {
         ...ch3Spec,
@@ -558,16 +567,6 @@ router.post('/fixtures/verify-deliverable', async (req: Request, res: Response) 
         sku: customSku || ch3Spec.sku,
       };
     }
-
-    // 2. Elastic kNN Vector Authenticity Verification
-    const deliverableFileName = fileName || 'production_cloud_architecture_spec.pdf';
-    const fakeBuffer = Buffer.from(
-      `Deliverable artifact content for ${milestone.name} - SKU: ${ch3Spec.sku} - File: ${deliverableFileName}`
-    );
-    const elasticAuth = await verificationService.verifyDeliverableAuthenticity(
-      deliverableFileName,
-      fakeBuffer
-    );
 
     const deliverable = {
       id: `deliv-${Date.now()}`,
@@ -592,34 +591,33 @@ router.post('/fixtures/verify-deliverable', async (req: Request, res: Response) 
     milestone.status = 'VERIFIED';
     store.setMilestone(milestone);
 
-    // 3. Index in Elastic Audit Vault
-    await verificationService.indexAuditTrail({
-      transactionId: milestone.activeAuthorizationId || milestone.id,
-      buyerEmail: 'procurement@acmeglobal.sandbox.com',
-      buyerName: 'Acme Global Ventures LLC',
-      buyerIp: '198.51.100.42',
-      downloadTimestamp: new Date().toISOString(),
-      policyAccepted: true,
-      deliverableSha256: elasticAuth.sha256Hash,
-      imageKnnSimilarityScore: elasticAuth.knnScore,
-      isAuthentic: elasticAuth.isAuthentic,
-      featureVector: elasticAuth.featureVector,
-    });
-
-    // Run DeliveryAuditor autonomous agent with 64-dim vector cosine math
+    // 3. Index in Elastic Audit Vault + Run DeliveryAuditor autonomous agent in parallel
     emitAgentState('DeliveryAuditor', 'DELIVERY_VERIFY', 'THINKING');
-    try {
-      await runDeliveryAuditorAgent({
+    await Promise.all([
+      verificationService.indexAuditTrail({
+        transactionId: milestone.activeAuthorizationId || milestone.id,
+        buyerEmail: 'procurement@acmeglobal.sandbox.com',
+        buyerName: 'Acme Global Ventures LLC',
+        buyerIp: '198.51.100.42',
+        downloadTimestamp: new Date().toISOString(),
+        policyAccepted: true,
+        deliverableSha256: elasticAuth.sha256Hash,
+        imageKnnSimilarityScore: elasticAuth.knnScore,
+        isAuthentic: elasticAuth.isAuthentic,
+        featureVector: elasticAuth.featureVector,
+      }),
+      runDeliveryAuditorAgent({
         milestoneId: milestone.id,
         authorizationId: milestone.activeAuthorizationId || milestone.id,
         deliverableHash: elasticAuth.sha256Hash,
         knnScore: elasticAuth.knnScore,
         channel3Sku: ch3Spec.sku,
         amount: milestone.amount,
-      });
-    } catch (agentErr: any) {
-      logger.warn('DeliveryAuditorAgent execution note', { error: agentErr.message });
-    }
+      }).catch((agentErr: any) => {
+        logger.warn('DeliveryAuditorAgent execution note', { error: agentErr.message });
+        return null;
+      }),
+    ]);
     emitAgentState('DeliveryAuditor', 'DELIVERY_VERIFY', 'COMPLETED');
 
     // 4. Stage capture in HITL Gate

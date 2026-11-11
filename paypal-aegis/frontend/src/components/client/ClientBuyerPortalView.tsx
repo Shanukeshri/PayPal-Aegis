@@ -35,7 +35,7 @@ export const ClientBuyerPortalView: React.FC<ClientBuyerPortalViewProps> = ({
 
   const activeMilestone =
     milestones.find((m) => m.status !== 'DRAFT') || milestones[0];
-  const primaryDispute = disputes[0];
+  const primaryDispute = disputes[disputes.length - 1];
 
   const isCaptured = milestones.some((m) => m.status === 'CAPTURED');
   const isReauthorized = milestones.some((m) => m.status === 'REAUTHORIZED');
@@ -61,7 +61,7 @@ export const ClientBuyerPortalView: React.FC<ClientBuyerPortalViewProps> = ({
     deliverable?.verificationDetails?.channel3SkuMatch || 'CH3-TECH-88921';
   const knnPercent = deliverable?.verificationDetails?.elasticKnnScore
     ? (deliverable.verificationDetails.elasticKnnScore * 100).toFixed(1)
-    : '96.5';
+    : '85.9';
 
   const offerAmount =
     primaryDispute?.offer?.seller_offered_amount?.value ||
@@ -78,10 +78,10 @@ export const ClientBuyerPortalView: React.FC<ClientBuyerPortalViewProps> = ({
   };
 
   return (
-    <div className="bg-white border border-purple-200 rounded-2xl p-4 shadow-subtle flex flex-col justify-between space-y-3.5 h-full">
+    <div className="bg-white border border-purple-200 rounded-2xl p-3 shadow-subtle flex flex-col justify-between space-y-2.5 h-full">
       {/* Column Header: Client Identity */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between pb-3 border-b border-[#E5E0D8]">
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between pb-2 border-b border-[#E5E0D8]">
           <div className="flex items-center space-x-2.5">
             <div className="w-9 h-9 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-700">
               <UserCircleIcon className="w-6 h-6" />
@@ -285,7 +285,9 @@ export const ClientBuyerPortalView: React.FC<ClientBuyerPortalViewProps> = ({
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-bold text-[#1C1917] flex items-center gap-1.5">
                 <HandThumbUpIcon className="w-4 h-4 text-amber-700" />
-                Pre-Escalation Offer ({primaryDispute.dispute_id})
+                {primaryDispute.dispute_life_cycle_stage === 'CHARGEBACK'
+                  ? `Escalated Claim (${primaryDispute.dispute_id})`
+                  : `Pre-Escalation Offer (${primaryDispute.dispute_id})`}
               </span>
               <span
                 className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
@@ -301,10 +303,17 @@ export const ClientBuyerPortalView: React.FC<ClientBuyerPortalViewProps> = ({
             <p className="text-[11px] text-[#1C1917] leading-relaxed">
               {isDisputeResolved
                 ? `✅ Offer Accepted — $${offerAmount} USD refunded instantly. Inquiry closed at $0 dispute fee; merchant ratio restored to safe tier.`
-                : `🤝 Merchant proposed $${offerAmount} USD instant settlement ($0 dispute fee, immediate credit without chargeback escalation).`}
+                : primaryDispute.status === 'UNDER_REVIEW'
+                ? `⚖️ Escalated Claim (${primaryDispute.dispute_id}) — Evidence uploaded by merchant; PayPal Adjudication team reviewing.`
+                : primaryDispute.status === 'WAITING_FOR_BUYER_RESPONSE'
+                ? `🤝 Merchant proposed $${offerAmount} USD instant settlement ($0 dispute fee, immediate credit without chargeback escalation).`
+                : primaryDispute.dispute_life_cycle_stage === 'CHARGEBACK'
+                ? `🚨 Escalated Chargeback (${primaryDispute.dispute_id}) — Awaiting Merchant multipart evidence (pre-escalation offer locked).`
+                : `⏳ Open SNAD Inquiry (${primaryDispute.dispute_id}) — Awaiting Merchant $0-fee settlement offer or evidence.`}
             </p>
 
-            {!isDisputeResolved && (
+            {primaryDispute.status === 'WAITING_FOR_BUYER_RESPONSE' &&
+              primaryDispute.dispute_life_cycle_stage !== 'CHARGEBACK' && (
               <button
                 type="button"
                 disabled={busyAction === 'accept-offer'}

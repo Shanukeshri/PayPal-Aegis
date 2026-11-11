@@ -67,6 +67,8 @@ export const api = {
   acceptDisputeOffer: (id: string, settlementAmount?: string) =>
     client.post(`/disputes/${id}/accept-offer`, { settlementAmount }).then((r) => r.data),
   provideDisputeEvidence: (id: string) => client.post(`/disputes/${id}/provide-evidence`).then((r) => r.data),
+  simulateEscalatedChargeback: (disputeAmount = '350.00') =>
+    client.post('/disputes/simulate-escalated-chargeback', { disputeAmount }).then((r) => r.data),
   getEvidencePdfUrl: (id: string) => `${API_BASE}/disputes/${id}/evidence-pdf`,
   getRagTelemetry: () => client.get('/disputes/telemetry/rag').then((r) => r.data.data),
   getAgentTelemetry: () => client.get('/disputes/telemetry/agent').then((r) => r.data.data),

@@ -19,6 +19,23 @@ import { store, StoredAgentTelemetry } from '../lib/store';
 import { getToolsForPhase, WorkflowPhase, ToolSchema } from '../engines/safegate/tool-router';
 
 let openrouterClient: OpenRouter | null = null;
+const LLM_RACE_TIMEOUT_MS = 1000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${ms}ms; using deterministic fallback`));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function getClient(): OpenRouter | null {
   if (!openrouterClient && config.openai.apiKey) {
@@ -104,18 +121,22 @@ export async function runContractParserAgent(
         'Analyze the user Statement of Work, decompose deliverables into structured milestones, ' +
         'and invoke create_order to initialize the PayPal two-step escrow hold with intent: AUTHORIZE.';
 
-      const response = await client.chat.send({
-        chatRequest: {
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Statement of Work:\n${sowText.substring(0, 1200)}` },
-          ],
-          tools: openAiTools,
-          toolChoice: 'auto',
-          stream: false,
-        },
-      });
+      const response = await withTimeout(
+        client.chat.send({
+          chatRequest: {
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `Statement of Work:\n${sowText.substring(0, 1200)}` },
+            ],
+            tools: openAiTools,
+            toolChoice: 'auto',
+            stream: false,
+          },
+        }),
+        LLM_RACE_TIMEOUT_MS,
+        'ContractParserAgent LLM call'
+      );
 
       const message = response.choices?.[0]?.message;
       const msgAny = message as any;
@@ -214,23 +235,27 @@ export async function runDeliveryAuditorAgent(params: {
         'Evaluate deliverable authenticity based on Channel3 SKU specifications and 64-dim vector cosine similarity scores. ' +
         'If verified (similarity >= 0.82), call capture_authorization to stage the fund release in SafeGate HITL.';
 
-      const response = await client.chat.send({
-        chatRequest: {
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            {
-              role: 'user',
-              content:
-                `Audit Request: Milestone ${params.milestoneId}, Active Auth ID: ${params.authorizationId}, ` +
-                `SHA-256: ${params.deliverableHash}, 64-Dim Cosine Score: ${params.knnScore}, Channel3 SKU: ${params.channel3Sku}`,
-            },
-          ],
-          tools: openAiTools,
-          toolChoice: 'auto',
-          stream: false,
-        },
-      });
+      const response = await withTimeout(
+        client.chat.send({
+          chatRequest: {
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              {
+                role: 'user',
+                content:
+                  `Audit Request: Milestone ${params.milestoneId}, Active Auth ID: ${params.authorizationId}, ` +
+                  `SHA-256: ${params.deliverableHash}, 64-Dim Cosine Score: ${params.knnScore}, Channel3 SKU: ${params.channel3Sku}`,
+              },
+            ],
+            tools: openAiTools,
+            toolChoice: 'auto',
+            stream: false,
+          },
+        }),
+        LLM_RACE_TIMEOUT_MS,
+        'DeliveryAuditorAgent LLM call'
+      );
 
       const message = response.choices?.[0]?.message;
       const msgAny = message as any;

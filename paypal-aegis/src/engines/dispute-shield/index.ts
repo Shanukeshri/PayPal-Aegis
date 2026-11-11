@@ -303,7 +303,8 @@ export async function simulateSnadDisputeFixture(
   targetRatio = 0.0142,
   customSales?: number,
   customDisputes?: number,
-  customDisputeAmount?: string
+  customDisputeAmount?: string,
+  stage: 'INQUIRY' | 'CHARGEBACK' = 'INQUIRY'
 ): Promise<{
   dispute: PayPalDispute;
   triage: DisputeTriageResult;
@@ -317,7 +318,7 @@ export async function simulateSnadDisputeFixture(
   const existingDisputes = Math.max(0, targetDisputes - 1);
   store.setDisputeRatioCounters(sales, existingDisputes);
 
-  const disputeId = 'PP-D-40193';
+  const disputeId = stage === 'CHARGEBACK' ? 'PP-D-40194-CB' : 'PP-D-40193';
   const dueDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
   const disputeAmountVal = customDisputeAmount || '350.00';
 
@@ -328,13 +329,16 @@ export async function simulateSnadDisputeFixture(
     status: 'WAITING_FOR_SELLER_RESPONSE',
     reason: 'MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED',
     dispute_amount: { currency_code: 'USD', value: disputeAmountVal },
-    dispute_life_cycle_stage: 'INQUIRY', // Inquiry stage near 1.5%
+    dispute_life_cycle_stage: stage,
     dispute_channel: 'INTERNAL',
     seller_response_due_date: dueDate,
     messages: [
       {
         posted_by: 'BUYER',
-        content: 'The milestone deliverables did not match the agreed technical specifications.',
+        content:
+          stage === 'CHARGEBACK'
+            ? 'Escalated SNAD chargeback filed against milestone deliverables requiring formal representment evidence.'
+            : 'The milestone deliverables did not match the agreed technical specifications.',
         time_posted: new Date().toISOString(),
       },
     ],

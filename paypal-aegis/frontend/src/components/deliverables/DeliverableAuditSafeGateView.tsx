@@ -30,7 +30,13 @@ export const DeliverableAuditSafeGateView: React.FC<DeliverableAuditSafeGateView
   const [executingAction, setExecutingAction] = useState<string | null>(null);
   const [decisionFeedback, setDecisionFeedback] = useState<{ text: string; type: 'success' | 'danger' } | null>(null);
 
-  const activeMilestone = milestones.find((m) => m.status === 'VERIFIED') || milestones[0];
+  const verifiedDeliverable =
+    milestones.flatMap((m) => m.deliverables || []).find((d) => d.verificationDetails) ||
+    milestones[0]?.deliverables?.[0];
+  const activeMilestone =
+    milestones.find((m) => m.deliverables?.some((d) => d.verificationDetails)) ||
+    milestones.find((m) => m.status === 'VERIFIED') ||
+    milestones[0];
   const sha256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
   const fileName = 'edge_router_v2_schematic.pdf';
   const fileSize = '248 KB (253,952 bytes)';
@@ -39,6 +45,14 @@ export const DeliverableAuditSafeGateView: React.FC<DeliverableAuditSafeGateView
   const pendingCapture = pendingApprovals.find(
     (r) => r.type === 'AUTHORIZATION_CAPTURE' || (r.payload as any)?.action === 'CAPTURE_AUTHORIZATION'
   ) || pendingApprovals[0];
+
+  const verificationDetails = verifiedDeliverable?.verificationDetails;
+  const rawKnnScore =
+    verificationDetails?.elasticKnnScore ?? (pendingCapture?.payload as any)?.knnScore;
+  const knnScoreNum = typeof rawKnnScore === 'number' ? rawKnnScore : 0.8586;
+  const knnPercentStr = (knnScoreNum * 100).toFixed(1);
+  const cosineDistStr = Math.max(0.001, 1 - knnScoreNum).toFixed(3);
+  const skuMatch = verificationDetails?.channel3SkuMatch || 'CH3-TECH-88921';
 
   const handleCopyHash = () => {
     navigator.clipboard.writeText(sha256);
@@ -301,7 +315,7 @@ resource "aegis_escrow_milestone" "m1" {
                   </span>
                 </div>
                 <div className="mt-1 font-mono text-xs font-bold text-[#0070BA]">
-                  CH3-TECH-88921 Verified
+                  {skuMatch} Verified
                 </div>
                 <p className="text-[10px] text-[#57534E] mt-0.5">
                   SKU catalog attributes matched: Tier 4 SLA, MIT Enterprise License, Level 4 Spec.
@@ -320,10 +334,10 @@ resource "aegis_escrow_milestone" "m1" {
                   </span>
                 </div>
                 <div className="mt-1 font-mono text-xs font-bold text-emerald-800">
-                  96.5% Authentic Match — Not Stock Photo
+                  {knnPercentStr}% Authentic Match — Not Stock Photo
                 </div>
                 <p className="text-[10px] text-[#57534E] mt-0.5">
-                  Cosine distance 0.035 in 1536-dim embedding vault. Stock photo probability &lt;0.5%.
+                  Cosine distance {cosineDistStr} in 64-dim embedding vault. Stock photo probability &lt;0.5%.
                 </p>
               </div>
             </div>
@@ -347,7 +361,7 @@ resource "aegis_escrow_milestone" "m1" {
 
           <div className="pt-2 border-t border-[#E5E0D8] text-[11px] text-[#57534E] flex items-center justify-between">
             <span>Grounding Confidence:</span>
-            <span className="font-bold font-mono text-[#1C1917]">99.8% (APIMatic + Elastic)</span>
+            <span className="font-bold font-mono text-[#1C1917]">Dual Verified (APIMatic + Elastic)</span>
           </div>
         </div>
 

@@ -84,11 +84,11 @@ export const InteractiveHeroStepper: React.FC<InteractiveHeroStepperProps> = ({
   return (
     <nav
       aria-label="Workflow Execution Stepper"
-      className="bg-white border-b border-[#E5E0D8] px-4 py-3 shadow-subtle relative z-30"
+      className="bg-white border-b border-[#E5E0D8] px-4 py-2 shadow-subtle relative z-30"
     >
       <div className="max-w-7xl mx-auto">
         {/* Stepper Header Meta Bar */}
-        <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-[#E5E0D8]/60 text-xs text-[#57534E]">
+        <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-[#E5E0D8]/60 text-xs text-[#57534E]">
           <div className="flex items-center space-x-2">
             <span className="font-bold text-[#1C1917] tracking-tight uppercase text-[11px] flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#0070BA]"></span>
@@ -129,7 +129,7 @@ export const InteractiveHeroStepper: React.FC<InteractiveHeroStepperProps> = ({
                     onExecuteStep(s.id);
                   }
                 }}
-                className={`group relative text-left rounded-xl p-3 border transition-all duration-200 cursor-pointer flex flex-col justify-between ${
+                className={`group relative text-left rounded-xl p-2.5 border transition-all duration-200 cursor-pointer flex flex-col justify-between ${
                   isExecutingThis
                     ? 'bg-[#E6F2FA]/70 border-[#0070BA] ring-2 ring-[#0070BA]/30 shadow-md'
                     : isStepActive
@@ -174,7 +174,7 @@ export const InteractiveHeroStepper: React.FC<InteractiveHeroStepperProps> = ({
                 </div>
 
                 {/* Bottom Action Button & Animated SVG Dots */}
-                <div className="mt-3 pt-2 border-t border-[#E5E0D8]/60 flex items-center justify-between gap-2">
+                <div className="mt-2 pt-1.5 border-t border-[#E5E0D8]/60 flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={(e) => {

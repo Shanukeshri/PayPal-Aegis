@@ -74,6 +74,18 @@ router.post('/:id/make-offer', async (req: Request, res: Response) => {
     const prevDispute = store.getDispute(disputeId);
     const prevStatus = prevDispute?.status || 'WAITING_FOR_SELLER_RESPONSE';
 
+    if (
+      prevDispute &&
+      (prevDispute.status === 'UNDER_REVIEW' ||
+        prevDispute.status === 'RESOLVED' ||
+        prevDispute.dispute_life_cycle_stage === 'CHARGEBACK')
+    ) {
+      return res.status(409).json({
+        success: false,
+        error: `PayPal Lifecycle Guard: make-offer ($0 pre-escalation settlement) is only valid for open Inquiries. ${disputeId} is ${prevDispute.dispute_life_cycle_stage} (${prevDispute.status}).`,
+      });
+    }
+
     const result = await disputeShield.executeMakeOffer(
       disputeId,
       offerAmount,
@@ -183,6 +195,13 @@ async function handleClientAcceptOffer(req: Request, res: Response) {
     }
 
     const prevStatus = dispute.status;
+
+    if (prevStatus === 'UNDER_REVIEW' || dispute.dispute_life_cycle_stage === 'CHARGEBACK') {
+      return res.status(409).json({
+        success: false,
+        error: `PayPal Lifecycle Guard: Cannot accept a pre-escalation offer while claim ${disputeId} is ${prevStatus} (${dispute.dispute_life_cycle_stage}) under PayPal adjudication.`,
+      });
+    }
 
     if (prevStatus !== 'RESOLVED') {
       dispute.status = 'RESOLVED';
@@ -339,6 +358,65 @@ router.post('/:id/provide-evidence', async (req: Request, res: Response) => {
     res.json({ success: true, data: { ...result, diff } });
   } catch (err: any) {
     logger.error('Failed to submit dispute evidence', { err: err.message });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/disputes/simulate-escalated-chargeback — Test Branch B (CHARGEBACK -> provide-evidence)
+router.post('/simulate-escalated-chargeback', async (req: Request, res: Response) => {
+  try {
+    const amount = String(req.body?.disputeAmount || '350.00');
+    const result = await disputeShield.simulateSnadDisputeFixture(
+      0.0155,
+      194,
+      3,
+      amount,
+      'CHARGEBACK'
+    );
+
+    publishEcosystemEvent({
+      sender: 'CLIENT',
+      recipient: 'BUSINESS',
+      agentName: 'DisputeStrategist (Branch B: Escalated Claim)',
+      eventType: 'DISPUTE_OPENED',
+      title: `Escalated Chargeback Filed (${result.dispute.dispute_id})`,
+      message: `Escalated SNAD chargeback ($${amount}) opened at CHARGEBACK stage (ratio ${(result.triage.currentRatio.ratio * 100).toFixed(2)}%). Pre-escalation make-offer is locked; formal multipart A4 PDF evidence is required.`,
+      payload: {
+        disputeId: result.dispute.dispute_id,
+        stage: 'CHARGEBACK',
+        status: result.dispute.status,
+        recommendedAction: 'PROVIDE_EVIDENCE',
+      },
+    });
+
+    const diff = publishStateMutationDiff({
+      actionLabel: 'Branch B: Escalated Chargeback Simulated (Adjudication Track)',
+      actor: 'BUSINESS',
+      agentName: 'DisputeStrategist (Audit RAG + A4)',
+      targetId: result.dispute.dispute_id,
+      changes: [
+        {
+          field: 'Dispute Stage',
+          previousValue: 'INQUIRY (Branch A)',
+          newValue: 'CHARGEBACK (Branch B)',
+          badge: 'FORMAL CLAIM',
+          highlightType: 'DISPUTED',
+        },
+        {
+          field: 'Required Defense',
+          previousValue: 'MAKE_OFFER',
+          newValue: 'PROVIDE_EVIDENCE (A4 PDF Multipart)',
+          badge: 'READY TO FILE',
+          highlightType: 'DISPUTED',
+        },
+      ],
+      downstreamImpact:
+        'Pre-escalation make-offer disabled cleanly per PayPal v1/customer/disputes lifecycle. Submit A4 multipart PDF evidence via provide-evidence.',
+    });
+
+    res.json({ success: true, data: { ...result, diff } });
+  } catch (err: any) {
+    logger.error('Failed to simulate escalated chargeback', { err: err.message });
     res.status(500).json({ success: false, error: err.message });
   }
 });
