@@ -5,7 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+audio/
 # Environment & Secrets
 .env
 .env*.local
@@ -13,7 +13,7 @@ lerna-debug.log*
 .env.test
 .env.production
 !.env.example
-
+demo-video-raw/
 # Build & Output
 dist/
 build/
@@ -73,3 +73,4 @@ temp/
 
 
 
+*.mp4

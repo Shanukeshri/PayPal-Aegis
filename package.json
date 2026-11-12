@@ -17,8 +17,18 @@
     "generate:report-pdf": "cd paypal-aegis && npm run generate:report-pdf",
     "generate:flow-pdf": "cd paypal-aegis && npm run generate:flow-pdf"
   },
-  "keywords": ["paypal", "aegis", "escrow", "dispute", "ai", "agent", "mcp"],
+  "keywords": [
+    "paypal",
+    "aegis",
+    "escrow",
+    "dispute",
+    "ai",
+    "agent",
+    "mcp"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.65.0"
+  }
 }
-
