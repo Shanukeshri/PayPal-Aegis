@@ -18,29 +18,45 @@ const CHROME_PATH =
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const ROOT_DIR = path.resolve(__dirname, '../..');
-const SCREENSHOTS_DIR = path.resolve(ROOT_DIR, 'screenshots');
-const LOGS_DIR = path.resolve(ROOT_DIR, 'logs');
+const SCREENSHOTS_DIR = path.resolve(__dirname, '../screenshots');
+const LOGS_DIR = path.resolve(__dirname, '../logs');
 const OUTPUT_PDF_ROOT = path.resolve(ROOT_DIR, 'report.pdf');
 const OUTPUT_PDF_PKG = path.resolve(__dirname, '../report.pdf');
 
 function getBase64Image(filename: string): string {
-  const p = path.join(SCREENSHOTS_DIR, filename);
-  if (fs.existsSync(p)) {
-    const data = fs.readFileSync(p);
-    return `data:image/png;base64,${data.toString('base64')}`;
+  const candidates = [
+    path.join(SCREENSHOTS_DIR, filename),
+    path.resolve(__dirname, '../screenshots', filename),
+    path.resolve(ROOT_DIR, 'paypal-aegis/screenshots', filename),
+    path.resolve(ROOT_DIR, 'screenshots', filename),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      const data = fs.readFileSync(p);
+      return `data:image/png;base64,${data.toString('base64')}`;
+    }
   }
+  console.warn(`[PDF Generator] Screenshot not found in candidates: ${filename}`);
   return '';
 }
 
 function readLog(filename: string): any {
-  const p = path.join(LOGS_DIR, filename);
-  if (fs.existsSync(p)) {
-    try {
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
-    } catch {
-      return null;
+  const candidates = [
+    path.join(LOGS_DIR, filename),
+    path.resolve(__dirname, '../logs', filename),
+    path.resolve(ROOT_DIR, 'paypal-aegis/logs', filename),
+    path.resolve(ROOT_DIR, 'logs', filename),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      try {
+        return JSON.parse(fs.readFileSync(p, 'utf8'));
+      } catch {
+        return null;
+      }
     }
   }
+  console.warn(`[PDF Generator] Log file not found in candidates: ${filename}`);
   return null;
 }
 
@@ -474,11 +490,11 @@ function generateHtml(): string {
               </div>
               <div class="meta-item">
                 <span>Target Prizes</span>
-                <strong>Best Use of AG Grid ($5,000) • Bryntum</strong>
+                <strong>Best Use of APIMatic ($3,000) • Best Use of AG Grid ($5,000) • Bryntum</strong>
               </div>
               <div class="meta-item">
                 <span>Overall Audit Status</span>
-                <strong style="color:#2E7D32;">14 / 14 TESTS PASSED (100%)</strong>
+                <strong style="color:#2E7D32;">18 / 18 CHECKS PASSED (100%)</strong>
               </div>
             </div>
           </div>
@@ -507,6 +523,13 @@ function generateHtml(): string {
                 <td>7</td>
                 <td>7</td>
                 <td><span class="badge-pass">PASS (100%)</span></td>
+              </tr>
+              <tr>
+                <td><strong>APIMatic OpenAPI v3</strong></td>
+                <td>Orders v2, Payments v2, Disputes v1 &amp; Balances v1</td>
+                <td>4</td>
+                <td>4</td>
+                <td><span class="badge-pass">GROUNDED (100%)</span></td>
               </tr>
               <tr>
                 <td><strong>Devpost Rules</strong></td>

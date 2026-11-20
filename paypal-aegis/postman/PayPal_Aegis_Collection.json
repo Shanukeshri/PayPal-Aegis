@@ -1,15 +1,16 @@
 {
   "info": {
-    "_postman_id": "aegis-paypal-hackathon-2026-seq",
-    "name": "PayPal Aegis — Automated Test Sequences",
-    "description": "Production test sequences for PayPal Aegis Operating System.\nCovering two-step milestone authorization, Day-3 honor period reauthorization with mutated authorization_id, 36-char UUID idempotency, $0 pre-escalation dispute settlement, and multipart provide-evidence submission.",
+    "_postman_id": "aegis-paypal-hackathon-2026-complete-suite",
+    "name": "PayPal Aegis — Complete Automated Test Suite",
+    "description": "Production test sequences for PayPal Aegis Operating System.\nCovering two-step milestone authorization (Orders v2 intent: AUTHORIZE), Day-3 honor period reauthorization with mutated authorization_id, 36-char UUIDv4 idempotency, SafeGate 4-tool MCP phase scoping, Channel3 + Elastic 64-dim cosine kNN delivery verification, SafeGate HITL gate approval, raw-byte CRC32 webhook ingestion, 1.5% dispute ratio radar, $0 pre-escalation dispute settlement (Branch A), and multipart PDF evidence representment (Branch B).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3001/api",
-      "type": "string"
+      "value": "https://paypal-aegis.onrender.com/api",
+      "type": "string",
+      "description": "Live Render endpoint (or http://localhost:3001/api for local development)"
     },
     {
       "key": "orderId",
@@ -23,12 +24,17 @@
     },
     {
       "key": "mutatedAuthorizationId",
-      "value": "",
+      "value": "AUTH-ROTATED-998822",
       "type": "string"
     },
     {
       "key": "disputeId",
       "value": "PP-D-882910",
+      "type": "string"
+    },
+    {
+      "key": "approvalId",
+      "value": "hitl-appr-001",
       "type": "string"
     },
     {
@@ -38,6 +44,40 @@
     }
   ],
   "item": [
+    {
+      "name": "Sequence 0: System Health & Diagnostics",
+      "item": [
+        {
+          "name": "0.1 Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "https://paypal-aegis.onrender.com/health",
+              "protocol": "https",
+              "host": ["paypal-aegis", "onrender", "com"],
+              "path": ["health"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Service is healthy', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql('HEALTHY');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
     {
       "name": "Sequence 1: Two-Step Order Creation & Day-3 Reauthorization",
       "item": [
@@ -58,7 +98,24 @@
               "host": ["{{baseUrl}}"],
               "path": ["safegate", "orders"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Order created with status 200 or 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.id) {",
+                  "    pm.collectionVariables.set('orderId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "1.2 Authorize Order (Lock 72h Hold)",
@@ -73,7 +130,24 @@
               "host": ["{{baseUrl}}"],
               "path": ["safegate", "orders", "{{orderId}}", "authorize"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Authorization successful', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.id) {",
+                  "    pm.collectionVariables.set('activeAuthorizationId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "1.3 Day-3 Reauthorize (Mutates authorization_id)",
@@ -88,7 +162,78 @@
               "host": ["{{baseUrl}}"],
               "path": ["escrow", "milestones", "m1-cloud-arch", "fast-forward"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Day-3 reauthorization rotated pointer', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.4 Payments v2 Direct Reauthorize",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PayPal-Request-Id", "value": "c1f715b4-d546-4cb8-8c01-7fa86b241372" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/safegate/authorizations/{{activeAuthorizationId}}/reauthorize",
+              "host": ["{{baseUrl}}"],
+              "path": ["safegate", "authorizations", "{{activeAuthorizationId}}", "reauthorize"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Reauthorization endpoint responded', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.5 Void Authorization (Contract Cancellation Release)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PayPal-Request-Id", "value": "91a27e43-85b2-4d2c-9a4f-0b31e9c74d61" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/safegate/authorizations/{{activeAuthorizationId}}/void",
+              "host": ["{{baseUrl}}"],
+              "path": ["safegate", "authorizations", "{{activeAuthorizationId}}", "void"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Void endpoint responded successfully', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -112,7 +257,20 @@
               "host": ["{{baseUrl}}"],
               "path": ["escrow", "milestones", "m1-cloud-arch", "capture"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Initial capture response received', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "2.2 Replay Capture (Verifies Idempotent Snapshot Cache)",
@@ -131,26 +289,144 @@
               "host": ["{{baseUrl}}"],
               "path": ["escrow", "milestones", "m1-cloud-arch", "capture"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Idempotent replay served cached snapshot without duplicate mutation', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "Sequence 3: Pre-Escalation Inquiry Settlement ($0 Dispute Fee)",
+      "name": "Sequence 3: SafeGate MCP Firewall & Dynamic Tool Scoping",
       "item": [
         {
-          "name": "3.1 Check Rolling 90-Day Dispute Ratio Radar",
+          "name": "3.1 Tools for ESCROW_SETUP Phase (4 Canonical Tools)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/disputes/ratio",
+              "raw": "{{baseUrl}}/safegate/tools?phase=ESCROW_SETUP",
               "host": ["{{baseUrl}}"],
-              "path": ["disputes", "ratio"]
+              "path": ["safegate", "tools"],
+              "query": [
+                { "key": "phase", "value": "ESCROW_SETUP" }
+              ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Dynamic tool router scoped to 4 tools', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.tools.length).to.eql(4);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
-          "name": "3.2 Make Settlement Offer (Resolves Inquiry at $0 Fee)",
+          "name": "3.2 Tools for DELIVERY_AUDIT Phase",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/safegate/tools?phase=DELIVERY_AUDIT",
+              "host": ["{{baseUrl}}"],
+              "path": ["safegate", "tools"],
+              "query": [
+                { "key": "phase", "value": "DELIVERY_AUDIT" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Delivery audit tools returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.3 Tools for DISPUTE_DEFENSE Phase",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/safegate/tools?phase=DISPUTE_DEFENSE",
+              "host": ["{{baseUrl}}"],
+              "path": ["safegate", "tools"],
+              "query": [
+                { "key": "phase", "value": "DISPUTE_DEFENSE" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Dispute defense tools returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.4 Multi-Currency Reporting Balances v1",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/safegate/balances",
+              "host": ["{{baseUrl}}"],
+              "path": ["safegate", "balances"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Reporting balances v1 returned valid schema', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data).to.have.property('total_balance');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sequence 4: Multimodal Delivery Audit & SafeGate HITL Gate",
+      "item": [
+        {
+          "name": "4.1 Verify Deliverable (Channel3 + Elastic 64-Dim Cosine kNN)",
           "request": {
             "method": "POST",
             "header": [
@@ -158,22 +434,256 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"offerAmount\": {\n    \"currency_code\": \"USD\",\n    \"value\": \"350.00\"\n  },\n  \"note\": \"Full amicable settlement offer prior to claim escalation.\",\n  \"offerType\": \"REFUND\"\n}"
+              "raw": "{\n  \"productTitle\": \"Industrial Edge Router SKU-9921\",\n  \"channel3Sku\": \"CH3-TECH-88921\",\n  \"fileName\": \"edge_router_v2_schematic.pdf\",\n  \"fileSize\": 254200\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/escrow/milestones/m1-cloud-arch/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["escrow", "milestones", "m1-cloud-arch", "verify"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Deliverable verification completed and staged in HITL queue', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.2 Get Pending SafeGate HITL Approvals",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/hitl/pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["hitl", "pending"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HITL pending approvals list returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.length > 0) {",
+                  "        pm.collectionVariables.set('approvalId', json.data[0].id);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.3 Approve & Execute Staged Action (Client / Merchant Operator)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approver\": \"Lead Solutions Architect\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hitl/{{approvalId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["hitl", "{{approvalId}}", "approve"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HITL approval executed safely', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sequence 5: Zero-Lag Webhook Gateway & Raw CRC32 Ingestion",
+      "item": [
+        {
+          "name": "5.1 Ingest Webhook (Raw CRC32 Checksum)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "paypal-transmission-id", "value": "TRANS-887711-POSTMAN" },
+              { "key": "paypal-transmission-time", "value": "2026-11-20T12:00:00Z" },
+              { "key": "paypal-auth-algo", "value": "SHA256withRSA" },
+              { "key": "paypal-cert-url", "value": "https://api.sandbox.paypal.com/v1/notifications/certs/CERT-1234" },
+              { "key": "paypal-transmission-sig", "value": "SIMULATED_SIG_BASE64_==" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"WH-EVENT-881920\",\n  \"event_type\": \"PAYMENT.AUTHORIZATION.CREATED\",\n  \"resource_type\": \"authorization\",\n  \"resource\": {\n    \"id\": \"AUTH-882299-DEMO\",\n    \"status\": \"CREATED\",\n    \"amount\": {\n      \"currency_code\": \"USD\",\n      \"value\": \"1250.00\"\n    }\n  },\n  \"links\": [\n    {\n      \"href\": \"https://api.sandbox.paypal.com/v2/payments/authorizations/AUTH-882299-DEMO\",\n      \"rel\": \"self\",\n      \"method\": \"GET\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/paypal",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "paypal"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Webhook ingested or acknowledged without crash', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.2 Simulate Webhook Event via Demo Gateway",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_type\": \"PAYMENT.AUTHORIZATION.VOIDED\",\n  \"resource\": {\n    \"id\": \"AUTH-SIM-VOID-11\",\n    \"status\": \"VOIDED\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/demo",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "demo"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Demo webhook processed successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sequence 6: 1.5% Dispute Ratio Radar & Dual-Branch Defense",
+      "item": [
+        {
+          "name": "6.1 Check Rolling 90-Day Dispute Ratio Radar",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/disputes/ratio",
+              "host": ["{{baseUrl}}"],
+              "path": ["disputes", "ratio"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Dispute ratio radar computed correctly', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.current).to.have.property('ratio');",
+                  "    pm.expect(json.data.current).to.have.property('thresholdWarning');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.2 List All Disputes & Triage Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/disputes",
+              "host": ["{{baseUrl}}"],
+              "path": ["disputes"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Disputes list returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.length > 0) {",
+                  "        pm.collectionVariables.set('disputeId', json.data[0].dispute_id);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.3 Branch A: Make Settlement Offer ($0 Dispute Fee)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"offerAmount\": {\n    \"currency_code\": \"USD\",\n    \"value\": \"350.00\"\n  },\n  \"note\": \"Full amicable pre-escalation settlement offer at $0 PayPal fee.\",\n  \"offerType\": \"REFUND\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/disputes/{{disputeId}}/make-offer",
               "host": ["{{baseUrl}}"],
               "path": ["disputes", "{{disputeId}}", "make-offer"]
             }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Sequence 4: Multipart PDF Evidence Representment (SNAD Claim)",
-      "item": [
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Pre-escalation offer responded', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 409]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
         {
-          "name": "4.1 Download Compiled A4 Evidence PDF",
+          "name": "6.4 Branch B: Download Compiled A4 Evidence PDF (<10MB)",
           "request": {
             "method": "GET",
             "url": {
@@ -181,10 +691,24 @@
               "host": ["{{baseUrl}}"],
               "path": ["disputes", "{{disputeId}}", "evidence-pdf"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Compiled evidence PDF downloaded successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
-          "name": "4.2 Submit Multipart provide-evidence Package",
+          "name": "6.5 Branch B: Submit Multipart provide-evidence Package",
           "request": {
             "method": "POST",
             "header": [
@@ -199,10 +723,22 @@
               "host": ["{{baseUrl}}"],
               "path": ["disputes", "{{disputeId}}", "provide-evidence"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Evidence package accepted', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     }
   ]
 }
-

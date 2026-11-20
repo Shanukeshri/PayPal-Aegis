@@ -74,3 +74,4 @@ temp/
 
 
 *.mp4
+!report.pdf
